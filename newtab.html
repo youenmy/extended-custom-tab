@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Новая вкладка</title>
+  <link rel="stylesheet" href="newtab.css">
+</head>
+<body>
+  <div class="container">
+    <h1 class="logo">Google</h1>
+
+    <form class="search-form" action="https://www.google.com/search" method="get">
+      <span class="search-icon">+</span>
+      <input type="text" name="q" class="search-input" placeholder="Поиск Google" autofocus autocomplete="off">
+    </form>
+
+    <div class="shortcuts" id="shortcuts"></div>
+
+    <div class="actions">
+      <button class="add-btn" id="addBtn">+ Добавить ярлык</button>
+    </div>
+  </div>
+
+  <div class="settings-container">
+    <button class="settings-btn" id="settingsBtn" title="Настройки" aria-label="Настройки">⚙</button>
+    <div class="settings-menu" id="settingsMenu" hidden>
+      <button class="settings-item" id="bgBtn">Сменить фон</button>
+      <input type="file" id="bgInput" accept="image/*" hidden>
+      <button class="settings-item" id="bgResetBtn" hidden>Убрать фон</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal">
+    <div class="modal-content">
+      <h2 id="modalTitle">Новый ярлык</h2>
+      <label>Название</label>
+      <input type="text" id="shortcutName" placeholder="Например, Gmail">
+      <label>URL</label>
+      <input type="text" id="shortcutUrl" placeholder="https://mail.google.com">
+      <div class="modal-buttons">
+        <button id="deleteBtn" class="btn-delete" style="display:none">Удалить</button>
+        <button id="cancelBtn" class="btn-cancel">Отмена</button>
+        <button id="saveBtn" class="btn-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="newtab.js"></script>
+</body>
+</html>
