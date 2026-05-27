@@ -298,12 +298,6 @@ function addDragHandlers(el) {
     el.classList.remove('drag-over');
     clearExtDragState();
 
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      await setBackgroundFromFile(file);
-      return;
-    }
-
     const targetIndex = parseInt(el.dataset.index, 10);
     if (e.dataTransfer.getData('application/x-shortcut-index')) {
       if (draggedIndex >= 0 && draggedIndex !== targetIndex) {
@@ -380,20 +374,15 @@ function clearExtDragState() {
 }
 
 function dragKind(dt) {
-  const types = Array.from(dt.types);
-  if (types.includes('Files')) return 'file';
   if (hasUrlInTransfer(dt)) return 'url';
   return null;
 }
 
 document.addEventListener('dragenter', (e) => {
   if (!isExternalDrag(e.dataTransfer)) return;
-  const kind = dragKind(e.dataTransfer);
-  if (!kind) return;
+  if (!dragKind(e.dataTransfer)) return;
   extDragCounter++;
-  shortcutsEl.dataset.dropHint = kind === 'file'
-    ? 'Отпустите чтобы установить фон'
-    : 'Отпустите чтобы добавить ярлык';
+  shortcutsEl.dataset.dropHint = 'Отпустите чтобы добавить ярлык';
   shortcutsEl.classList.add('drop-zone-active');
 });
 
@@ -405,19 +394,16 @@ document.addEventListener('dragleave', (e) => {
 });
 
 document.addEventListener('dragover', (e) => {
-  if (isExternalDrag(e.dataTransfer)) e.preventDefault();
+  if (!isExternalDrag(e.dataTransfer)) return;
+  if (!dragKind(e.dataTransfer)) return;
+  e.preventDefault();
 });
 
 document.addEventListener('drop', async (e) => {
   if (!isExternalDrag(e.dataTransfer)) return;
+  if (!dragKind(e.dataTransfer)) return;
   e.preventDefault();
   clearExtDragState();
-
-  const file = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) {
-    await setBackgroundFromFile(file);
-    return;
-  }
 
   const parsed = parseDroppedData(e.dataTransfer);
   if (parsed) {
