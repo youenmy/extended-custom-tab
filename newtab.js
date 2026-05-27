@@ -42,9 +42,27 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsMenu = document.getElementById('settingsMenu');
 
 async function load() {
-  const data = await storage.get(['shortcuts', 'background']);
-  shortcuts = (data && data.shortcuts) || DEFAULT_SHORTCUTS;
-  applyBackground(data && data.background);
+  const [syncData, localData] = await Promise.all([
+    syncStorage.get('shortcuts').catch(() => ({})),
+    storage.get(['shortcuts', 'background'])
+  ]);
+
+  if (syncData && syncData.shortcuts) {
+    shortcuts = syncData.shortcuts;
+  } else if (localData && localData.shortcuts) {
+    // Migration from v2.1 and below: copy shortcuts from local to sync
+    shortcuts = localData.shortcuts;
+    try {
+      await syncStorage.set({ shortcuts });
+      console.log('[v2.2] shortcuts migrated from local to sync');
+    } catch (e) {
+      console.warn('[v2.2] shortcuts sync migration failed:', e);
+    }
+  } else {
+    shortcuts = DEFAULT_SHORTCUTS;
+  }
+
+  applyBackground(localData && localData.background);
   render();
 }
 
@@ -98,7 +116,12 @@ function imageFileToDataUrl(file, maxWidth = 2560, quality = 0.85) {
 }
 
 async function save() {
-  await storage.set({ shortcuts });
+  try {
+    await syncStorage.set({ shortcuts });
+  } catch (e) {
+    console.warn('[v2.2] sync quota exceeded, fallback to local:', e);
+    await storage.set({ shortcuts });
+  }
 }
 
 function normalizeUrl(url) {
@@ -520,9 +543,14 @@ notesAddBtn.addEventListener('click', () => {
 
 if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && changes.notes && !isEditingNote) {
+    if (area !== 'sync') return;
+    if (changes.notes && !isEditingNote) {
       notes = changes.notes.newValue || [];
       renderNotes();
+    }
+    if (changes.shortcuts) {
+      shortcuts = changes.shortcuts.newValue || [];
+      render();
     }
   });
 }
