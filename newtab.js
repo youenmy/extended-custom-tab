@@ -18,6 +18,10 @@ const storage = (typeof chrome !== 'undefined' && chrome.storage && chrome.stora
       set: (obj) => { Object.entries(obj).forEach(([k, v]) => localStorage.setItem(k, JSON.stringify(v))); return Promise.resolve(); }
     };
 
+const syncStorage = (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync)
+  ? chrome.storage.sync
+  : storage;
+
 let shortcuts = [];
 let editingIndex = -1;
 let draggedIndex = -1;
@@ -423,4 +427,119 @@ document.addEventListener('drop', async (e) => {
   }
 });
 
+// === Notes ===
+
+let notes = [];
+let isEditingNote = false;
+const notesListEl = document.getElementById('notesList');
+const notesAddBtn = document.getElementById('notesAdd');
+
+async function loadNotes() {
+  try {
+    const data = await syncStorage.get('notes');
+    notes = (data && data.notes) || [];
+  } catch {
+    notes = [];
+  }
+  renderNotes();
+}
+
+async function saveNotes() {
+  try {
+    await syncStorage.set({ notes });
+  } catch (e) {
+    console.warn('saveNotes failed:', e);
+  }
+}
+
+function renderNotes() {
+  notesListEl.innerHTML = '';
+  if (notes.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'notes-empty';
+    empty.textContent = 'Пока нет заметок';
+    notesListEl.appendChild(empty);
+    return;
+  }
+  notes.forEach((n, i) => {
+    const li = document.createElement('li');
+    li.className = 'note' + (n.done ? ' done' : '');
+    li.innerHTML = `
+      <input type="checkbox" class="note-check" ${n.done ? 'checked' : ''} aria-label="Готово">
+      <span class="note-text"></span>
+      <button class="note-delete" title="Удалить" aria-label="Удалить">×</button>
+    `;
+    li.querySelector('.note-text').textContent = n.text || '(пусто)';
+    li.querySelector('.note-check').addEventListener('change', async () => {
+      notes[i].done = !notes[i].done;
+      await saveNotes();
+      renderNotes();
+    });
+    li.querySelector('.note-delete').addEventListener('click', async () => {
+      notes.splice(i, 1);
+      await saveNotes();
+      renderNotes();
+    });
+    li.querySelector('.note-text').addEventListener('click', () => editNote(i));
+    notesListEl.appendChild(li);
+  });
+}
+
+function editNote(index, isNew = false) {
+  const li = notesListEl.children[index];
+  if (!li) return;
+  const textEl = li.querySelector('.note-text');
+  if (!textEl) return;
+  const currentText = notes[index].text || '';
+
+  isEditingNote = true;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'note-text-input';
+  input.value = currentText;
+  if (isNew) input.placeholder = 'Введите заметку...';
+  textEl.replaceWith(input);
+  input.focus();
+  if (currentText) input.select();
+
+  let finished = false;
+  const finish = async (cancel = false) => {
+    if (finished) return;
+    finished = true;
+    isEditingNote = false;
+    const val = input.value.trim();
+    if (cancel) {
+      if (isNew) notes.splice(index, 1);
+    } else if (!val) {
+      if (isNew) notes.splice(index, 1);
+    } else {
+      notes[index].text = val;
+    }
+    await saveNotes();
+    renderNotes();
+  };
+  input.addEventListener('blur', () => finish(false));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(true); }
+  });
+}
+
+notesAddBtn.addEventListener('click', () => {
+  if (isEditingNote) return;
+  notes.unshift({ text: '', done: false });
+  renderNotes();
+  editNote(0, true);
+});
+
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.notes && !isEditingNote) {
+      notes = changes.notes.newValue || [];
+      renderNotes();
+    }
+  });
+}
+
 load();
+loadNotes();
