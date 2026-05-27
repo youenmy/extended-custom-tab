@@ -45,12 +45,27 @@ body.has-bg::before {
   z-index: 1;
 }
 
+.clock {
+  margin-bottom: 28px;
+  text-align: center;
+}
+
 .logo {
   font-size: 90px;
   font-weight: 400;
   color: #6dd5ce;
-  margin-bottom: 28px;
   letter-spacing: -2px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.clock-date {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #cfd8d9;
+  letter-spacing: 1px;
+  font-weight: 400;
+  text-transform: lowercase;
 }
 
 .search-form {

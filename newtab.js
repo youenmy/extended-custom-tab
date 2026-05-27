@@ -826,5 +826,31 @@ setInterval(async () => {
   renderCalendar();
 }, 15 * 60 * 1000);
 
+// === Clock ===
+
+const CLOCK_DAYS_RU = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+const CLOCK_MONTHS_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const clockTimeEl = document.getElementById('clockTime');
+const clockDateEl = document.getElementById('clockDate');
+
+function updateClock() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  clockTimeEl.textContent = `${hh}:${mm}`;
+  clockDateEl.textContent = `${CLOCK_DAYS_RU[now.getDay()]}, ${now.getDate()} ${CLOCK_MONTHS_RU[now.getMonth()]}`;
+}
+
+function startClock() {
+  updateClock();
+  const msToNextMinute = 60000 - (Date.now() % 60000);
+  setTimeout(() => {
+    updateClock();
+    setInterval(updateClock, 60000);
+  }, msToNextMinute);
+}
+
+startClock();
+
 load();
 loadNotes();
