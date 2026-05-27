@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Extended Custom Tab",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Стартовая страница с неограниченным количеством ярлыков",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },
-  "permissions": ["storage", "favicon"],
+  "permissions": ["storage", "favicon", "identity"],
+  "host_permissions": ["https://www.googleapis.com/*"],
+  "oauth2": {
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/calendar.readonly"]
+  },
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",

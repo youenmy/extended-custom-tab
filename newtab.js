@@ -541,5 +541,193 @@ if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged)
   });
 }
 
+// === Calendar ===
+
+const calendarContent = document.getElementById('calendarContent');
+const calendarRefreshBtn = document.getElementById('calendarRefresh');
+
+function getCalendarToken(interactive) {
+  return new Promise((resolve, reject) => {
+    if (typeof chrome === 'undefined' || !chrome.identity || !chrome.identity.getAuthToken) {
+      reject(new Error('chrome.identity недоступен'));
+      return;
+    }
+    chrome.identity.getAuthToken({ interactive }, (token) => {
+      const err = chrome.runtime.lastError;
+      if (err || !token) {
+        reject(new Error((err && err.message) || 'нет токена'));
+      } else {
+        resolve(token);
+      }
+    });
+  });
+}
+
+function removeCachedToken(token) {
+  return new Promise((resolve) => {
+    if (!chrome.identity || !chrome.identity.removeCachedAuthToken) return resolve();
+    chrome.identity.removeCachedAuthToken({ token }, () => resolve());
+  });
+}
+
+async function fetchCalendarEvents(interactive = false) {
+  if (!isCalendarConfigured()) {
+    showCalendarSetupNeeded();
+    return;
+  }
+  let token;
+  try {
+    token = await getCalendarToken(interactive);
+  } catch (e) {
+    showCalendarConnectPrompt();
+    return;
+  }
+
+  const now = new Date();
+  const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+  url.searchParams.set('timeMin', now.toISOString());
+  url.searchParams.set('timeMax', future.toISOString());
+  url.searchParams.set('maxResults', '30');
+  url.searchParams.set('singleEvents', 'true');
+  url.searchParams.set('orderBy', 'startTime');
+
+  try {
+    calendarRefreshBtn.classList.add('spinning');
+    const res = await fetch(url.href, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 401) {
+      await removeCachedToken(token);
+      calendarRefreshBtn.classList.remove('spinning');
+      return fetchCalendarEvents(interactive);
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderCalendarEvents(data.items || []);
+  } catch (e) {
+    showCalendarError(e.message || String(e));
+  } finally {
+    setTimeout(() => calendarRefreshBtn.classList.remove('spinning'), 400);
+  }
+}
+
+function isCalendarConfigured() {
+  try {
+    const m = chrome.runtime.getManifest();
+    const cid = m && m.oauth2 && m.oauth2.client_id;
+    return cid && !cid.startsWith('YOUR_CLIENT_ID');
+  } catch {
+    return false;
+  }
+}
+
+function showCalendarSetupNeeded() {
+  calendarContent.innerHTML = `
+    <div class="calendar-empty">
+      <div style="margin-bottom:8px">⚙ OAuth не настроен</div>
+      <div style="font-size:11px;color:#6a8a90">В manifest.json замени <code>YOUR_CLIENT_ID</code> на свой Google OAuth Client ID.<br>См. README → «Настройка Calendar».</div>
+    </div>
+  `;
+}
+
+function showCalendarConnectPrompt() {
+  calendarContent.innerHTML = `
+    <div class="calendar-connect">
+      <button class="add-btn" id="calendarConnectBtn">Подключить Google Calendar</button>
+    </div>
+  `;
+  document.getElementById('calendarConnectBtn').addEventListener('click', () => fetchCalendarEvents(true));
+}
+
+function showCalendarError(msg) {
+  calendarContent.innerHTML = `
+    <div class="calendar-error">
+      <div>Ошибка: ${escapeHtml(msg)}</div>
+      <div style="margin-top:8px"><button class="add-btn" id="calendarRetryBtn">Повторить</button></div>
+    </div>
+  `;
+  document.getElementById('calendarRetryBtn').addEventListener('click', () => fetchCalendarEvents(true));
+}
+
+function formatDayLabel(date) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diff = Math.round((target - today) / (24 * 60 * 60 * 1000));
+  if (diff === 0) return 'Сегодня';
+  if (diff === 1) return 'Завтра';
+  const days = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+  const months = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  return `${days[target.getDay()]}, ${target.getDate()} ${months[target.getMonth()]}`;
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderCalendarEvents(events) {
+  if (events.length === 0) {
+    calendarContent.innerHTML = '<div class="calendar-empty">Нет событий на ближайшую неделю</div>';
+    return;
+  }
+  const groups = new Map();
+  events.forEach((e) => {
+    const start = e.start.dateTime || e.start.date;
+    const date = new Date(start);
+    const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  });
+
+  const frag = document.createDocumentFragment();
+  for (const [key, evts] of groups) {
+    const group = document.createElement('div');
+    group.className = 'calendar-day-group';
+
+    const label = document.createElement('div');
+    label.className = 'calendar-day-label';
+    label.textContent = formatDayLabel(new Date(key));
+    group.appendChild(label);
+
+    evts.forEach((e) => {
+      const a = document.createElement('a');
+      a.href = e.htmlLink || '#';
+      a.target = '_blank';
+      a.rel = 'noopener';
+      const allDay = !e.start.dateTime;
+      a.className = 'calendar-event' + (allDay ? ' allday' : '');
+
+      const time = document.createElement('span');
+      time.className = 'calendar-event-time';
+      time.textContent = allDay ? 'весь день' : formatTime(new Date(e.start.dateTime));
+
+      const title = document.createElement('span');
+      title.className = 'calendar-event-title';
+      title.textContent = e.summary || '(без названия)';
+
+      a.appendChild(time);
+      a.appendChild(title);
+      group.appendChild(a);
+    });
+
+    frag.appendChild(group);
+  }
+  calendarContent.innerHTML = '';
+  calendarContent.appendChild(frag);
+}
+
+calendarRefreshBtn.addEventListener('click', () => fetchCalendarEvents(false));
+
+// Initial: try silently, fall back to connect prompt
+if (typeof chrome !== 'undefined' && chrome.identity) {
+  fetchCalendarEvents(false);
+} else {
+  calendarContent.innerHTML = '<div class="calendar-empty">chrome.identity недоступен</div>';
+}
+
+// Auto-refresh every 5 minutes
+setInterval(() => {
+  if (isCalendarConfigured()) fetchCalendarEvents(false);
+}, 5 * 60 * 1000);
+
 load();
 loadNotes();
