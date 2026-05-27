@@ -6,12 +6,8 @@
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },
-  "permissions": ["storage", "favicon", "identity"],
-  "host_permissions": ["https://www.googleapis.com/*"],
-  "oauth2": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/calendar.readonly"]
-  },
+  "permissions": ["storage", "favicon"],
+  "host_permissions": ["https://calendar.google.com/*"],
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",

@@ -541,193 +541,304 @@ if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged)
   });
 }
 
-// === Calendar ===
+// === Calendar (month grid + optional iCal feed) ===
 
 const calendarContent = document.getElementById('calendarContent');
 const calendarRefreshBtn = document.getElementById('calendarRefresh');
+const icalBtn = document.getElementById('icalBtn');
+const icalResetBtn = document.getElementById('icalResetBtn');
 
-function getCalendarToken(interactive) {
-  return new Promise((resolve, reject) => {
-    if (typeof chrome === 'undefined' || !chrome.identity || !chrome.identity.getAuthToken) {
-      reject(new Error('chrome.identity недоступен'));
-      return;
-    }
-    chrome.identity.getAuthToken({ interactive }, (token) => {
-      const err = chrome.runtime.lastError;
-      if (err || !token) {
-        reject(new Error((err && err.message) || 'нет токена'));
-      } else {
-        resolve(token);
-      }
-    });
-  });
-}
+const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+const DAY_NAMES_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const MONTHS_SHORT_RU = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const DAY_FULL_RU = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 
-function removeCachedToken(token) {
-  return new Promise((resolve) => {
-    if (!chrome.identity || !chrome.identity.removeCachedAuthToken) return resolve();
-    chrome.identity.removeCachedAuthToken({ token }, () => resolve());
-  });
-}
+let calendarMonth = new Date().getMonth();
+let calendarYear = new Date().getFullYear();
+let selectedDay = sameDay(new Date());
+let icalEvents = [];
 
-async function fetchCalendarEvents(interactive = false) {
-  if (!isCalendarConfigured()) {
-    showCalendarSetupNeeded();
-    return;
-  }
-  let token;
-  try {
-    token = await getCalendarToken(interactive);
-  } catch (e) {
-    showCalendarConnectPrompt();
-    return;
-  }
-
-  const now = new Date();
-  const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
-  url.searchParams.set('timeMin', now.toISOString());
-  url.searchParams.set('timeMax', future.toISOString());
-  url.searchParams.set('maxResults', '30');
-  url.searchParams.set('singleEvents', 'true');
-  url.searchParams.set('orderBy', 'startTime');
-
-  try {
-    calendarRefreshBtn.classList.add('spinning');
-    const res = await fetch(url.href, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401) {
-      await removeCachedToken(token);
-      calendarRefreshBtn.classList.remove('spinning');
-      return fetchCalendarEvents(interactive);
-    }
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    renderCalendarEvents(data.items || []);
-  } catch (e) {
-    showCalendarError(e.message || String(e));
-  } finally {
-    setTimeout(() => calendarRefreshBtn.classList.remove('spinning'), 400);
-  }
-}
-
-function isCalendarConfigured() {
-  try {
-    const m = chrome.runtime.getManifest();
-    const cid = m && m.oauth2 && m.oauth2.client_id;
-    return cid && !cid.startsWith('YOUR_CLIENT_ID');
-  } catch {
-    return false;
-  }
-}
-
-function showCalendarSetupNeeded() {
-  calendarContent.innerHTML = `
-    <div class="calendar-empty">
-      <div style="margin-bottom:8px">⚙ OAuth не настроен</div>
-      <div style="font-size:11px;color:#6a8a90">В manifest.json замени <code>YOUR_CLIENT_ID</code> на свой Google OAuth Client ID.<br>См. README → «Настройка Calendar».</div>
-    </div>
-  `;
-}
-
-function showCalendarConnectPrompt() {
-  calendarContent.innerHTML = `
-    <div class="calendar-connect">
-      <button class="add-btn" id="calendarConnectBtn">Подключить Google Calendar</button>
-    </div>
-  `;
-  document.getElementById('calendarConnectBtn').addEventListener('click', () => fetchCalendarEvents(true));
-}
-
-function showCalendarError(msg) {
-  calendarContent.innerHTML = `
-    <div class="calendar-error">
-      <div>Ошибка: ${escapeHtml(msg)}</div>
-      <div style="margin-top:8px"><button class="add-btn" id="calendarRetryBtn">Повторить</button></div>
-    </div>
-  `;
-  document.getElementById('calendarRetryBtn').addEventListener('click', () => fetchCalendarEvents(true));
-}
-
-function formatDayLabel(date) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diff = Math.round((target - today) / (24 * 60 * 60 * 1000));
-  if (diff === 0) return 'Сегодня';
-  if (diff === 1) return 'Завтра';
-  const days = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-  const months = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-  return `${days[target.getDay()]}, ${target.getDate()} ${months[target.getMonth()]}`;
+function sameDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function formatTime(date) {
   return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
-function renderCalendarEvents(events) {
-  if (events.length === 0) {
-    calendarContent.innerHTML = '<div class="calendar-empty">Нет событий на ближайшую неделю</div>';
-    return;
-  }
-  const groups = new Map();
-  events.forEach((e) => {
-    const start = e.start.dateTime || e.start.date;
-    const date = new Date(start);
-    const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(e);
+function getEventsForDay(date) {
+  const target = sameDay(date).getTime();
+  return icalEvents.filter((e) => {
+    const start = new Date(e.start);
+    const end = e.end ? new Date(e.end) : new Date(start.getTime() + 60 * 60 * 1000);
+    const s = sameDay(start).getTime();
+    const eAdj = e.allDay ? new Date(end.getTime() - 1) : end;
+    const eDay = sameDay(eAdj).getTime();
+    return target >= s && target <= eDay;
+  }).sort((a, b) => new Date(a.start) - new Date(b.start));
+}
+
+function renderCalendar() {
+  const monthStart = new Date(calendarYear, calendarMonth, 1);
+  const monthEnd = new Date(calendarYear, calendarMonth + 1, 0);
+  const today = sameDay(new Date());
+
+  // Monday-first: 0=Mon..6=Sun. JS getDay: 0=Sun..6=Sat
+  let firstDayOfWeek = monthStart.getDay() - 1;
+  if (firstDayOfWeek < 0) firstDayOfWeek = 6;
+
+  const daysInMonth = monthEnd.getDate();
+
+  const wrapper = document.createElement('div');
+
+  const header = document.createElement('div');
+  header.className = 'cal-month-header';
+  header.innerHTML = `
+    <button class="cal-nav" id="calPrev" aria-label="Предыдущий месяц">‹</button>
+    <span class="cal-month-name">${MONTHS_RU[calendarMonth]} ${calendarYear}</span>
+    <button class="cal-nav" id="calNext" aria-label="Следующий месяц">›</button>
+  `;
+  wrapper.appendChild(header);
+
+  const grid = document.createElement('div');
+  grid.className = 'cal-grid';
+
+  DAY_NAMES_RU.forEach((d) => {
+    const el = document.createElement('div');
+    el.className = 'cal-day-name';
+    el.textContent = d;
+    grid.appendChild(el);
   });
 
-  const frag = document.createDocumentFragment();
-  for (const [key, evts] of groups) {
-    const group = document.createElement('div');
-    group.className = 'calendar-day-group';
+  for (let i = 0; i < firstDayOfWeek; i++) {
+    const el = document.createElement('div');
+    el.className = 'cal-day empty';
+    grid.appendChild(el);
+  }
 
-    const label = document.createElement('div');
-    label.className = 'calendar-day-label';
-    label.textContent = formatDayLabel(new Date(key));
-    group.appendChild(label);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayDate = new Date(calendarYear, calendarMonth, d);
+    const isToday = dayDate.getTime() === today.getTime();
+    const isSelected = dayDate.getTime() === selectedDay.getTime();
+    const events = getEventsForDay(dayDate);
+    const hasEvents = events.length > 0;
 
-    evts.forEach((e) => {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (isToday) cell.classList.add('today');
+    if (isSelected) cell.classList.add('selected');
+    if (hasEvents) cell.classList.add('has-events');
+    cell.textContent = String(d);
+    if (hasEvents) {
+      const dot = document.createElement('span');
+      dot.className = 'cal-dot';
+      cell.appendChild(dot);
+    }
+    cell.addEventListener('click', () => {
+      selectedDay = dayDate;
+      renderCalendar();
+    });
+    grid.appendChild(cell);
+  }
+
+  wrapper.appendChild(grid);
+
+  // Events for selected day
+  const eventsForSelected = getEventsForDay(selectedDay);
+  const list = document.createElement('div');
+  list.className = 'cal-events-list';
+
+  const label = document.createElement('div');
+  label.className = 'cal-events-day-label';
+  label.textContent = formatSelectedDayLabel(selectedDay);
+  list.appendChild(label);
+
+  if (eventsForSelected.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'cal-events-empty';
+    empty.textContent = icalEvents.length ? 'Нет событий' : 'iCal не подключён — настройки → «Подключить календарь»';
+    list.appendChild(empty);
+  } else {
+    eventsForSelected.forEach((e) => {
       const a = document.createElement('a');
-      a.href = e.htmlLink || '#';
-      a.target = '_blank';
-      a.rel = 'noopener';
-      const allDay = !e.start.dateTime;
-      a.className = 'calendar-event' + (allDay ? ' allday' : '');
+      a.href = '#';
+      a.className = 'calendar-event' + (e.allDay ? ' allday' : '');
+      a.style.cursor = 'default';
+      a.onclick = (ev) => ev.preventDefault();
 
       const time = document.createElement('span');
       time.className = 'calendar-event-time';
-      time.textContent = allDay ? 'весь день' : formatTime(new Date(e.start.dateTime));
+      time.textContent = e.allDay ? 'весь день' : formatTime(new Date(e.start));
 
       const title = document.createElement('span');
       title.className = 'calendar-event-title';
       title.textContent = e.summary || '(без названия)';
+      if (e.location) title.title = e.summary + ' — ' + e.location;
 
       a.appendChild(time);
       a.appendChild(title);
-      group.appendChild(a);
+      list.appendChild(a);
     });
-
-    frag.appendChild(group);
   }
+  wrapper.appendChild(list);
+
   calendarContent.innerHTML = '';
-  calendarContent.appendChild(frag);
+  calendarContent.appendChild(wrapper);
+
+  document.getElementById('calPrev').addEventListener('click', () => {
+    calendarMonth--;
+    if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
+    renderCalendar();
+  });
+  document.getElementById('calNext').addEventListener('click', () => {
+    calendarMonth++;
+    if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
+    renderCalendar();
+  });
 }
 
-calendarRefreshBtn.addEventListener('click', () => fetchCalendarEvents(false));
-
-// Initial: try silently, fall back to connect prompt
-if (typeof chrome !== 'undefined' && chrome.identity) {
-  fetchCalendarEvents(false);
-} else {
-  calendarContent.innerHTML = '<div class="calendar-empty">chrome.identity недоступен</div>';
+function formatSelectedDayLabel(date) {
+  const today = sameDay(new Date());
+  const target = sameDay(date);
+  const diff = Math.round((target - today) / (24 * 60 * 60 * 1000));
+  let prefix = '';
+  if (diff === 0) prefix = 'Сегодня';
+  else if (diff === 1) prefix = 'Завтра';
+  else if (diff === -1) prefix = 'Вчера';
+  else prefix = DAY_FULL_RU[target.getDay()];
+  return `${prefix}, ${target.getDate()} ${MONTHS_SHORT_RU[target.getMonth()]}`;
 }
 
-// Auto-refresh every 5 minutes
-setInterval(() => {
-  if (isCalendarConfigured()) fetchCalendarEvents(false);
-}, 5 * 60 * 1000);
+// === iCal parsing ===
+
+function unfoldIcsLines(text) {
+  const raw = text.split(/\r?\n/);
+  const out = [];
+  for (const line of raw) {
+    if ((line.startsWith(' ') || line.startsWith('\t')) && out.length) {
+      out[out.length - 1] += line.substring(1);
+    } else {
+      out.push(line);
+    }
+  }
+  return out;
+}
+
+function unescapeIcs(s) {
+  return s.replace(/\\n/g, '\n').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\');
+}
+
+function parseIcsDateTime(keyPart, value) {
+  const isDateOnly = /VALUE=DATE(?!-TIME)/i.test(keyPart) || /^\d{8}$/.test(value);
+  if (isDateOnly && /^\d{8}$/.test(value)) {
+    const y = value.substring(0, 4);
+    const m = value.substring(4, 6);
+    const d = value.substring(6, 8);
+    return { iso: `${y}-${m}-${d}T00:00:00`, allDay: true };
+  }
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
+  if (m) {
+    const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${m[7] || ''}`;
+    return { iso, allDay: false };
+  }
+  return { iso: value, allDay: false };
+}
+
+function parseIcs(text) {
+  const out = [];
+  const lines = unfoldIcsLines(text);
+  let ev = null;
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') {
+      ev = {};
+    } else if (line === 'END:VEVENT') {
+      if (ev && ev.summary && ev.start) out.push(ev);
+      ev = null;
+    } else if (ev) {
+      const colon = line.indexOf(':');
+      if (colon === -1) continue;
+      const keyPart = line.substring(0, colon);
+      const value = line.substring(colon + 1);
+      const baseKey = keyPart.split(';')[0];
+      if (baseKey === 'SUMMARY') ev.summary = unescapeIcs(value);
+      else if (baseKey === 'DTSTART') {
+        const { iso, allDay } = parseIcsDateTime(keyPart, value);
+        ev.start = iso;
+        if (allDay) ev.allDay = true;
+      } else if (baseKey === 'DTEND') {
+        const { iso } = parseIcsDateTime(keyPart, value);
+        ev.end = iso;
+      } else if (baseKey === 'LOCATION') ev.location = unescapeIcs(value);
+      else if (baseKey === 'DESCRIPTION') ev.description = unescapeIcs(value);
+    }
+  }
+  return out;
+}
+
+async function loadIcalEvents() {
+  const data = await storage.get('icalUrl');
+  const url = data && data.icalUrl;
+  if (!url) {
+    icalEvents = [];
+    icalResetBtn.hidden = true;
+    icalBtn.textContent = 'Подключить календарь (iCal)';
+    return;
+  }
+  icalResetBtn.hidden = false;
+  icalBtn.textContent = 'Сменить календарь (iCal)';
+  try {
+    calendarRefreshBtn.classList.add('spinning');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    icalEvents = parseIcs(text);
+  } catch (e) {
+    console.warn('iCal fetch failed:', e);
+    icalEvents = [];
+  } finally {
+    setTimeout(() => calendarRefreshBtn.classList.remove('spinning'), 400);
+  }
+}
+
+async function setupIcal() {
+  const current = (await storage.get('icalUrl')).icalUrl || '';
+  const url = prompt('Вставь Secret iCal URL из настроек Google Calendar\n(Settings → Settings for my calendars → Integrate calendar → Secret address in iCal format):', current);
+  if (url === null) return;
+  const trimmed = url.trim();
+  if (!trimmed) {
+    await storage.set({ icalUrl: null });
+  } else {
+    await storage.set({ icalUrl: trimmed });
+  }
+  settingsMenu.hidden = true;
+  await loadIcalEvents();
+  renderCalendar();
+}
+
+async function resetIcal() {
+  await storage.set({ icalUrl: null });
+  settingsMenu.hidden = true;
+  await loadIcalEvents();
+  renderCalendar();
+}
+
+calendarRefreshBtn.addEventListener('click', async () => {
+  await loadIcalEvents();
+  renderCalendar();
+});
+
+icalBtn.addEventListener('click', setupIcal);
+icalResetBtn.addEventListener('click', resetIcal);
+
+// Initial render — show calendar immediately, fetch iCal in background
+renderCalendar();
+loadIcalEvents().then(renderCalendar);
+
+// Auto-refresh iCal every 15 minutes
+setInterval(async () => {
+  await loadIcalEvents();
+  renderCalendar();
+}, 15 * 60 * 1000);
 
 load();
 loadNotes();
