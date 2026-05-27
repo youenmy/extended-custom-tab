@@ -32,13 +32,24 @@
     <ul class="notes-list" id="notesList"></ul>
   </aside>
 
-  <aside class="calendar-panel">
-    <div class="calendar-header">
-      <span class="calendar-title">Календарь</span>
-      <button class="calendar-refresh" id="calendarRefresh" title="Обновить" aria-label="Обновить">↻</button>
-    </div>
-    <div class="calendar-content" id="calendarContent"></div>
-  </aside>
+  <div class="right-column">
+    <aside class="calendar-panel">
+      <div class="calendar-header">
+        <span class="calendar-title">Календарь</span>
+        <button class="calendar-refresh" id="calendarRefresh" title="Обновить" aria-label="Обновить">↻</button>
+      </div>
+      <div class="calendar-content" id="calendarContent"></div>
+    </aside>
+
+    <aside class="mail-panel">
+      <div class="mail-header">
+        <span class="mail-title">Почта</span>
+        <span class="mail-count" id="mailCount" hidden></span>
+        <button class="mail-refresh" id="mailRefresh" title="Обновить" aria-label="Обновить">↻</button>
+      </div>
+      <div class="mail-content" id="mailContent"></div>
+    </aside>
+  </div>
 
   <div class="settings-container">
     <button class="settings-btn" id="settingsBtn" title="Настройки" aria-label="Настройки">⚙</button>

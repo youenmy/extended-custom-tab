@@ -852,5 +852,159 @@ function startClock() {
 
 startClock();
 
+// === Mail (Gmail Atom feed) ===
+
+const mailContent = document.getElementById('mailContent');
+const mailCountEl = document.getElementById('mailCount');
+const mailRefreshBtn = document.getElementById('mailRefresh');
+
+function getXmlText(parent, tagName) {
+  if (!parent) return '';
+  const els = parent.getElementsByTagName(tagName);
+  return els.length > 0 ? (els[0].textContent || '').trim() : '';
+}
+
+function mailRelativeTime(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '';
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMs / 3600000);
+  const diffDay = Math.floor(diffMs / 86400000);
+  if (diffMin < 1) return 'только что';
+  if (diffMin < 60) return `${diffMin} мин`;
+  if (diffHr < 24) return `${diffHr} ч`;
+  if (diffDay === 1) return 'вчера';
+  if (diffDay < 7) {
+    const days = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+    return days[date.getDay()];
+  }
+  return `${date.getDate()} ${MONTHS_SHORT_RU[date.getMonth()]}`;
+}
+
+async function loadMail() {
+  try {
+    mailRefreshBtn.classList.add('spinning');
+    const res = await fetch('https://mail.google.com/mail/feed/atom', {
+      credentials: 'include',
+      cache: 'no-store'
+    });
+    if (res.status === 401 || res.status === 403) {
+      renderMailNotLogged();
+      return;
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    if (!text.includes('<feed') && !text.includes('<entry')) {
+      renderMailNotLogged();
+      return;
+    }
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const parseErr = doc.querySelector('parsererror');
+    if (parseErr) throw new Error('XML parse error');
+
+    const fullcount = parseInt(getXmlText(doc.documentElement, 'fullcount') || '0', 10);
+    const entries = Array.from(doc.getElementsByTagName('entry')).map((entry) => {
+      const authorEl = entry.getElementsByTagName('author')[0];
+      const linkEl = entry.getElementsByTagName('link')[0];
+      return {
+        title: getXmlText(entry, 'title'),
+        summary: getXmlText(entry, 'summary'),
+        link: linkEl ? linkEl.getAttribute('href') : '',
+        issued: getXmlText(entry, 'issued') || getXmlText(entry, 'modified'),
+        author: {
+          name: getXmlText(authorEl, 'name'),
+          email: getXmlText(authorEl, 'email')
+        }
+      };
+    });
+    renderMail(entries, fullcount);
+  } catch (e) {
+    renderMailError(e.message || String(e));
+  } finally {
+    setTimeout(() => mailRefreshBtn.classList.remove('spinning'), 400);
+  }
+}
+
+function renderMail(entries, fullcount) {
+  if (fullcount > 0) {
+    mailCountEl.textContent = String(fullcount);
+    mailCountEl.hidden = false;
+  } else {
+    mailCountEl.hidden = true;
+  }
+
+  if (entries.length === 0) {
+    mailContent.innerHTML = '<div class="mail-empty">Нет непрочитанных</div>';
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  entries.forEach((e) => {
+    const a = document.createElement('a');
+    a.className = 'mail-item';
+    a.href = e.link || 'https://mail.google.com/';
+    a.target = '_blank';
+    a.rel = 'noopener';
+
+    const row1 = document.createElement('div');
+    row1.className = 'mail-item-row1';
+
+    const sender = document.createElement('span');
+    sender.className = 'mail-item-sender';
+    sender.textContent = e.author.name || e.author.email || '(без отправителя)';
+    if (e.author.email) sender.title = e.author.email;
+
+    const time = document.createElement('span');
+    time.className = 'mail-item-time';
+    time.textContent = mailRelativeTime(e.issued);
+
+    row1.appendChild(sender);
+    row1.appendChild(time);
+
+    const subject = document.createElement('div');
+    subject.className = 'mail-item-subject';
+    subject.textContent = e.title || '(без темы)';
+
+    a.appendChild(row1);
+    a.appendChild(subject);
+
+    if (e.summary) {
+      const summary = document.createElement('div');
+      summary.className = 'mail-item-summary';
+      summary.textContent = e.summary;
+      a.appendChild(summary);
+    }
+
+    frag.appendChild(a);
+  });
+
+  mailContent.innerHTML = '';
+  mailContent.appendChild(frag);
+}
+
+function renderMailNotLogged() {
+  mailCountEl.hidden = true;
+  mailContent.innerHTML = `
+    <div class="mail-not-logged">
+      Нужно войти в Gmail в этом профиле Chrome
+      <br><a href="https://mail.google.com/" target="_blank" rel="noopener">Открыть Gmail →</a>
+    </div>
+  `;
+}
+
+function renderMailError(msg) {
+  mailCountEl.hidden = true;
+  mailContent.innerHTML = `<div class="mail-error">Ошибка: ${escapeHtml(msg)}</div>`;
+}
+
+mailRefreshBtn.addEventListener('click', loadMail);
+
+// Initial load + auto-refresh every 5 minutes
+loadMail();
+setInterval(loadMail, 5 * 60 * 1000);
+
 load();
 loadNotes();
