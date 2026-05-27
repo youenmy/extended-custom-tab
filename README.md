@@ -54,6 +54,7 @@ Chrome-расширение, заменяющее стандартную ста�
 - Manifest V3
 - Permissions: `storage`, `favicon`
 - Host permissions: `https://calendar.google.com/*`, `https://mail.google.com/*` (для iCal-фида и Atom-фида Gmail)
+- Поле `key` в манифесте — стабильный extension ID на любой машине, чтобы `chrome.storage.sync` работал между Chrome на разных устройствах (с v2.1)
 - Без внешних зависимостей (vanilla JS/CSS)
 - Картинка фона хранится **внутри** расширения как копия — удаление исходного файла не ломает фон
 - Лимит хранилища: 10 МБ (квота `chrome.storage.local`). После ресайза одна фоновая картинка обычно <500 КБ.
