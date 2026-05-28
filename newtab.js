@@ -418,14 +418,39 @@ function renderFolderPopoverGrid(index) {
     a.addEventListener('dragstart', (e) => {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('application/x-folder-item', JSON.stringify({ folderIdx: index, itemIdx: idx }));
-      document.body.classList.add('folder-item-dragging');
+      fadeFolderPopover(true);
     });
     a.addEventListener('dragend', () => {
-      document.body.classList.remove('folder-item-dragging');
+      fadeFolderPopover(false);
     });
 
     grid.appendChild(a);
   });
+}
+
+function fadeFolderPopover(fade) {
+  const p = document.querySelector('.folder-popover');
+  const b = document.querySelector('.folder-popover-backdrop');
+  if (p) {
+    p.style.transition = 'opacity 0.15s';
+    if (fade) {
+      p.style.opacity = '0.18';
+      p.style.pointerEvents = 'none';
+    } else {
+      p.style.opacity = '';
+      p.style.pointerEvents = '';
+    }
+  }
+  if (b) {
+    b.style.transition = 'opacity 0.15s';
+    if (fade) {
+      b.style.opacity = '0';
+      b.style.pointerEvents = 'none';
+    } else {
+      b.style.opacity = '';
+      b.style.pointerEvents = '';
+    }
+  }
 }
 
 function closeFolderPopover(immediate = false) {
@@ -608,7 +633,7 @@ function addDragHandlers(el) {
     el.classList.remove('drag-over');
     el.classList.remove('drag-merge-ready');
     clearExtDragState();
-    document.body.classList.remove('folder-item-dragging');
+    fadeFolderPopover(false);
 
     const targetIndex = parseInt(el.dataset.index, 10);
     const targetItem = shortcuts[targetIndex];
@@ -801,7 +826,7 @@ document.addEventListener('drop', async (e) => {
   const folderItemData = e.dataTransfer.getData('application/x-folder-item');
   if (folderItemData) {
     e.preventDefault();
-    document.body.classList.remove('folder-item-dragging');
+    fadeFolderPopover(false);
     try {
       const { folderIdx, itemIdx } = JSON.parse(folderItemData);
       const sourceFolder = shortcuts[folderIdx];
