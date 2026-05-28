@@ -35,7 +35,6 @@ const urlInput = document.getElementById('shortcutUrl');
 const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const deleteBtn = document.getElementById('deleteBtn');
-const addBtn = document.getElementById('addBtn');
 const bgBtn = document.getElementById('bgBtn');
 const bgInput = document.getElementById('bgInput');
 const bgResetBtn = document.getElementById('bgResetBtn');
@@ -274,8 +273,6 @@ function closeModal() {
   }
 }
 
-addBtn.addEventListener('click', () => openModal(-1));
-
 // === Folder popover (Android-style) ===
 
 let openedFolderIndex = -1;
@@ -303,25 +300,22 @@ function openFolder(index) {
   const cols = 4;
   const rows = Math.max(1, Math.ceil(itemCount / cols));
   const popoverWidth = 360;
-  const popoverHeight = 56 + rows * 88 + 56;
+  const popoverHeightEstimate = 56 + rows * 92 + 8;
 
   let left = rect.left + rect.width / 2 - popoverWidth / 2;
   let top = rect.bottom + 12;
   left = Math.max(16, Math.min(left, vpW - popoverWidth - 16));
-  let originY = 0;
-  if (top + popoverHeight > vpH - 16) {
-    top = rect.top - popoverHeight - 12;
-    originY = popoverHeight;
+  if (top + popoverHeightEstimate > vpH - 16) {
+    top = rect.top - popoverHeightEstimate - 12;
   }
   if (top < 16) top = 16;
-  const originX = Math.max(0, Math.min(popoverWidth, rect.left + rect.width / 2 - left));
 
   const popover = document.createElement('div');
   popover.className = 'folder-popover';
+  popover.dataset.folderIndex = String(index);
   popover.style.left = `${left}px`;
   popover.style.top = `${top}px`;
   popover.style.width = `${popoverWidth}px`;
-  popover.style.transformOrigin = `${originX}px ${originY}px`;
   popover.innerHTML = `
     <input type="text" class="folder-popover-title" id="folderPopoverTitle" value="${escapeHtml(folder.name || 'Папка')}" placeholder="Папка">
     <div class="folder-popover-grid" id="folderPopoverGrid"></div>
@@ -329,6 +323,29 @@ function openFolder(index) {
   document.body.appendChild(popover);
 
   renderFolderPopoverGrid(index);
+
+  // Animate from the folder icon's center
+  requestAnimationFrame(() => {
+    const pRect = popover.getBoundingClientRect();
+    const folderCenterX = rect.left + rect.width / 2;
+    const folderCenterY = rect.top + rect.height / 2;
+    const popoverCenterX = pRect.left + pRect.width / 2;
+    const popoverCenterY = pRect.top + pRect.height / 2;
+    const dx = folderCenterX - popoverCenterX;
+    const dy = folderCenterY - popoverCenterY;
+
+    popover.animate(
+      [
+        { opacity: 0, transform: `translate(${dx}px, ${dy}px) scale(0.06)` },
+        { opacity: 1, transform: 'translate(0, 0) scale(1)' }
+      ],
+      { duration: 320, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' }
+    );
+    backdrop.animate(
+      [{ opacity: 0 }, { opacity: 1 }],
+      { duration: 220, easing: 'ease-out', fill: 'forwards' }
+    );
+  });
 
   const titleInput = document.getElementById('folderPopoverTitle');
   titleInput.addEventListener('keydown', (e) => {
@@ -414,19 +431,39 @@ function renderFolderPopoverGrid(index) {
 function closeFolderPopover(immediate = false) {
   const popover = document.querySelector('.folder-popover');
   const backdrop = document.querySelector('.folder-popover-backdrop');
+  const folderIdx = popover ? parseInt(popover.dataset.folderIndex || '-1', 10) : -1;
   openedFolderIndex = -1;
-  if (immediate) {
+  if (immediate || !popover) {
     if (popover) popover.remove();
     if (backdrop) backdrop.remove();
     return;
   }
-  if (popover) {
-    popover.classList.add('closing');
-    setTimeout(() => popover.remove(), 200);
+
+  // Reverse animation: collapse toward folder icon
+  let dx = 0, dy = 0;
+  const folderEl = folderIdx >= 0 ? shortcutsEl.querySelector(`.shortcut.folder[data-index="${folderIdx}"]`) : null;
+  if (folderEl) {
+    const fRect = folderEl.getBoundingClientRect();
+    const pRect = popover.getBoundingClientRect();
+    dx = (fRect.left + fRect.width / 2) - (pRect.left + pRect.width / 2);
+    dy = (fRect.top + fRect.height / 2) - (pRect.top + pRect.height / 2);
   }
+
+  const anim = popover.animate(
+    [
+      { opacity: 1, transform: 'translate(0, 0) scale(1)' },
+      { opacity: 0, transform: `translate(${dx}px, ${dy}px) scale(0.1)` }
+    ],
+    { duration: 200, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' }
+  );
+  anim.onfinish = () => popover.remove();
+
   if (backdrop) {
-    backdrop.classList.add('closing');
-    setTimeout(() => backdrop.remove(), 200);
+    const ba = backdrop.animate(
+      [{ opacity: 1 }, { opacity: 0 }],
+      { duration: 180, easing: 'ease-in', fill: 'forwards' }
+    );
+    ba.onfinish = () => backdrop.remove();
   }
 }
 
