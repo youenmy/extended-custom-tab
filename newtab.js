@@ -377,34 +377,45 @@ function renderFolderPopoverGrid(index) {
   }
 
   folder.items.forEach((link, idx) => {
-    const a = document.createElement('a');
-    a.href = normalizeUrl(link.url);
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.className = 'folder-popover-item';
-    a.draggable = true;
+    const item = document.createElement('div');
+    item.className = 'folder-popover-item';
+    item.draggable = true;
+    item.title = link.name;
+    item.dataset.url = normalizeUrl(link.url);
 
     const fav = faviconUrl(link.url);
-    a.innerHTML = `
+    item.innerHTML = `
       <div class="folder-popover-item-icon">
         ${fav ? `<img src="${fav}" alt="" loading="lazy">` : `<span>${escapeHtml(firstLetter(link.name))}</span>`}
       </div>
       <div class="folder-popover-item-name">${escapeHtml(link.name)}</div>
       <button class="folder-popover-item-delete" title="Удалить из папки">×</button>
     `;
-    const img = a.querySelector('img');
+
+    const img = item.querySelector('img');
     if (img) {
       img.addEventListener('error', () => {
         img.replaceWith(Object.assign(document.createElement('span'), { textContent: firstLetter(link.name) }));
       });
     }
-    a.querySelector('.folder-popover-item-delete').addEventListener('click', async (e) => {
+
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.folder-popover-item-delete')) return;
+      window.open(item.dataset.url, '_blank', 'noopener');
+    });
+    item.addEventListener('auxclick', (e) => {
+      // middle-click also opens in new tab
+      if (e.button === 1 && !e.target.closest('.folder-popover-item-delete')) {
+        window.open(item.dataset.url, '_blank', 'noopener');
+      }
+    });
+
+    item.querySelector('.folder-popover-item-delete').addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       folder.items.splice(idx, 1);
       await save();
       if (folder.items.length === 0) {
-        // Auto-remove empty folder
         shortcuts.splice(index, 1);
         closeFolderPopover();
         await save();
@@ -415,16 +426,16 @@ function renderFolderPopoverGrid(index) {
       }
     });
 
-    a.addEventListener('dragstart', (e) => {
+    item.addEventListener('dragstart', (e) => {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('application/x-folder-item', JSON.stringify({ folderIdx: index, itemIdx: idx }));
       fadeFolderPopover(true);
     });
-    a.addEventListener('dragend', () => {
+    item.addEventListener('dragend', () => {
       fadeFolderPopover(false);
     });
 
-    grid.appendChild(a);
+    grid.appendChild(item);
   });
 }
 

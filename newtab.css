@@ -322,6 +322,8 @@ body.has-bg::before {
   color: #fff;
   transition: background 0.12s, transform 0.12s;
   position: relative;
+  cursor: pointer;
+  -webkit-user-drag: element;
 }
 
 .folder-popover-item:hover {
