@@ -35,13 +35,6 @@ const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const addBtn = document.getElementById('addBtn');
-const addFolderBtn = document.getElementById('addFolderBtn');
-const folderModal = document.getElementById('folderModal');
-const folderNameInput = document.getElementById('folderNameInput');
-const folderItemsList = document.getElementById('folderItemsList');
-const folderDeleteBtn = document.getElementById('folderDeleteBtn');
-const folderAddLinkBtn = document.getElementById('folderAddLinkBtn');
-const folderCloseBtn = document.getElementById('folderCloseBtn');
 const bgBtn = document.getElementById('bgBtn');
 const bgInput = document.getElementById('bgInput');
 const bgResetBtn = document.getElementById('bgResetBtn');
@@ -271,66 +264,124 @@ function closeModal() {
 
 addBtn.addEventListener('click', () => openModal(-1));
 
-// === Folders ===
+// === Folder popover (Android-style) ===
 
 let openedFolderIndex = -1;
 let addingLinkToFolderIndex = -1;
 
-addFolderBtn.addEventListener('click', async () => {
-  const name = prompt('Название папки:', 'Новая папка');
-  if (name === null) return;
-  const trimmed = name.trim() || 'Папка';
-  shortcuts.push({ name: trimmed, items: [] });
-  await save();
-  render();
-});
-
 function openFolder(index) {
   if (!isFolder(shortcuts[index])) return;
+  closeFolderPopover(true);
   openedFolderIndex = index;
-  folderNameInput.value = shortcuts[index].name || '';
-  renderFolderItems();
-  folderModal.classList.add('active');
-}
 
-function closeFolder() {
-  // Commit name on close
-  if (openedFolderIndex >= 0) {
-    const newName = folderNameInput.value.trim() || 'Папка';
-    if (shortcuts[openedFolderIndex].name !== newName) {
-      shortcuts[openedFolderIndex].name = newName;
-      save().then(render);
-    }
+  const folderEl = shortcutsEl.querySelector(`.shortcut.folder[data-index="${index}"]`);
+  if (!folderEl) return;
+
+  const rect = folderEl.getBoundingClientRect();
+  const vpW = window.innerWidth;
+  const vpH = window.innerHeight;
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'folder-popover-backdrop';
+  backdrop.addEventListener('click', () => closeFolderPopover());
+  document.body.appendChild(backdrop);
+
+  const folder = shortcuts[index];
+  const itemCount = folder.items.length;
+  const cols = 4;
+  const rows = Math.max(1, Math.ceil(itemCount / cols));
+  const popoverWidth = 360;
+  const popoverHeight = 56 + rows * 88 + 56;
+
+  let left = rect.left + rect.width / 2 - popoverWidth / 2;
+  let top = rect.bottom + 12;
+  left = Math.max(16, Math.min(left, vpW - popoverWidth - 16));
+  let originY = 0;
+  if (top + popoverHeight > vpH - 16) {
+    top = rect.top - popoverHeight - 12;
+    originY = popoverHeight;
   }
-  openedFolderIndex = -1;
-  folderModal.classList.remove('active');
+  if (top < 16) top = 16;
+  const originX = Math.max(0, Math.min(popoverWidth, rect.left + rect.width / 2 - left));
+
+  const popover = document.createElement('div');
+  popover.className = 'folder-popover';
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+  popover.style.width = `${popoverWidth}px`;
+  popover.style.transformOrigin = `${originX}px ${originY}px`;
+  popover.innerHTML = `
+    <input type="text" class="folder-popover-title" id="folderPopoverTitle" value="${escapeHtml(folder.name || 'Папка')}" placeholder="Папка">
+    <div class="folder-popover-grid" id="folderPopoverGrid"></div>
+    <div class="folder-popover-actions">
+      <button class="folder-popover-action danger" id="folderPopoverDelete">Удалить</button>
+      <button class="folder-popover-action" id="folderPopoverAdd">+ Добавить ссылку</button>
+    </div>
+  `;
+  document.body.appendChild(popover);
+
+  renderFolderPopoverGrid(index);
+
+  const titleInput = document.getElementById('folderPopoverTitle');
+  titleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); titleInput.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeFolderPopover(); }
+  });
+  titleInput.addEventListener('blur', async () => {
+    const newName = titleInput.value.trim() || 'Папка';
+    if (shortcuts[index] && shortcuts[index].name !== newName) {
+      shortcuts[index].name = newName;
+      await save();
+      render();
+    }
+  });
+
+  document.getElementById('folderPopoverDelete').addEventListener('click', async () => {
+    const f = shortcuts[index];
+    if (f && f.items && f.items.length > 0) {
+      if (!confirm(`Удалить «${f.name}»? Внутри ${f.items.length} ссылок.`)) return;
+    }
+    shortcuts.splice(index, 1);
+    closeFolderPopover(true);
+    await save();
+    render();
+  });
+
+  document.getElementById('folderPopoverAdd').addEventListener('click', () => {
+    addingLinkToFolderIndex = index;
+    closeFolderPopover(true);
+    openModal(-1);
+  });
 }
 
-function renderFolderItems() {
-  const folder = shortcuts[openedFolderIndex];
-  if (!folder) return;
-  folderItemsList.innerHTML = '';
+function renderFolderPopoverGrid(index) {
+  const grid = document.getElementById('folderPopoverGrid');
+  if (!grid) return;
+  const folder = shortcuts[index];
+  grid.innerHTML = '';
+
   if (!folder.items || folder.items.length === 0) {
     const empty = document.createElement('div');
-    empty.className = 'folder-empty-msg';
-    empty.textContent = 'Папка пуста. Добавь ссылку или перетащи ярлык на эту папку.';
-    folderItemsList.appendChild(empty);
+    empty.className = 'folder-popover-empty';
+    empty.textContent = 'Папка пуста.';
+    grid.appendChild(empty);
     return;
   }
+
   folder.items.forEach((link, idx) => {
     const a = document.createElement('a');
     a.href = normalizeUrl(link.url);
     a.target = '_blank';
     a.rel = 'noopener';
-    a.className = 'folder-item';
+    a.className = 'folder-popover-item';
 
     const fav = faviconUrl(link.url);
     a.innerHTML = `
-      <div class="folder-item-icon">
+      <div class="folder-popover-item-icon">
         ${fav ? `<img src="${fav}" alt="" loading="lazy">` : `<span>${escapeHtml(firstLetter(link.name))}</span>`}
       </div>
-      <span class="folder-item-name">${escapeHtml(link.name)}</span>
-      <button class="folder-item-delete" title="Удалить">×</button>
+      <div class="folder-popover-item-name">${escapeHtml(link.name)}</div>
+      <button class="folder-popover-item-delete" title="Удалить из папки">×</button>
     `;
     const img = a.querySelector('img');
     if (img) {
@@ -338,50 +389,43 @@ function renderFolderItems() {
         img.replaceWith(Object.assign(document.createElement('span'), { textContent: firstLetter(link.name) }));
       });
     }
-
-    a.querySelector('.folder-item-delete').addEventListener('click', async (e) => {
+    a.querySelector('.folder-popover-item-delete').addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       folder.items.splice(idx, 1);
       await save();
-      renderFolderItems();
+      renderFolderPopoverGrid(index);
       render();
+      // If folder becomes empty after delete — close popover and remove folder
+      if (folder.items.length === 0) {
+        shortcuts.splice(index, 1);
+        closeFolderPopover();
+        await save();
+        render();
+      }
     });
-
-    folderItemsList.appendChild(a);
+    grid.appendChild(a);
   });
 }
 
-folderCloseBtn.addEventListener('click', closeFolder);
-
-folderModal.addEventListener('click', (e) => {
-  if (e.target === folderModal) closeFolder();
-});
-
-folderDeleteBtn.addEventListener('click', async () => {
-  if (openedFolderIndex < 0) return;
-  const folder = shortcuts[openedFolderIndex];
-  const itemCount = folder.items ? folder.items.length : 0;
-  if (itemCount > 0 && !confirm(`Удалить папку «${folder.name}»? Внутри ${itemCount} ссылок, они будут потеряны.`)) return;
-  shortcuts.splice(openedFolderIndex, 1);
+function closeFolderPopover(immediate = false) {
+  const popover = document.querySelector('.folder-popover');
+  const backdrop = document.querySelector('.folder-popover-backdrop');
   openedFolderIndex = -1;
-  folderModal.classList.remove('active');
-  await save();
-  render();
-});
-
-folderAddLinkBtn.addEventListener('click', () => {
-  if (openedFolderIndex < 0) return;
-  addingLinkToFolderIndex = openedFolderIndex;
-  // Hide folder modal temporarily, open shortcut modal
-  folderModal.classList.remove('active');
-  openModal(-1);
-});
-
-folderNameInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); closeFolder(); }
-  if (e.key === 'Escape') { e.preventDefault(); folderNameInput.blur(); closeFolder(); }
-});
+  if (immediate) {
+    if (popover) popover.remove();
+    if (backdrop) backdrop.remove();
+    return;
+  }
+  if (popover) {
+    popover.classList.add('closing');
+    setTimeout(() => popover.remove(), 200);
+  }
+  if (backdrop) {
+    backdrop.classList.add('closing');
+    setTimeout(() => backdrop.remove(), 200);
+  }
+}
 
 bgBtn.addEventListener('click', () => {
   bgInput.click();
@@ -458,7 +502,7 @@ modal.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (modal.classList.contains('active')) closeModal();
-    if (folderModal.classList.contains('active')) closeFolder();
+    if (document.querySelector('.folder-popover')) closeFolderPopover();
     if (!settingsMenu.hidden) settingsMenu.hidden = true;
   }
   if (e.key === 'Enter' && modal.classList.contains('active') && document.activeElement !== nameInput && document.activeElement !== urlInput) {
@@ -496,21 +540,24 @@ function addDragHandlers(el) {
     const idx = parseInt(el.dataset.index, 10);
     if (idx === draggedIndex) return;
     const targetItem = shortcuts[idx];
-    if (isFolder(targetItem) && draggedIndex >= 0 && !isFolder(shortcuts[draggedIndex])) {
-      el.classList.add('drag-target-folder');
+    const draggedItem = draggedIndex >= 0 ? shortcuts[draggedIndex] : null;
+    // Show "merge ready" for any link drop on link or folder (Android-style)
+    if (draggedItem && !isFolder(draggedItem)) {
+      el.classList.add('drag-merge-ready');
     } else {
+      // Folder dragged or external URL → standard reorder hint
       el.classList.add('drag-over');
     }
   });
   el.addEventListener('dragleave', () => {
     el.classList.remove('drag-over');
-    el.classList.remove('drag-target-folder');
+    el.classList.remove('drag-merge-ready');
   });
   el.addEventListener('drop', async (e) => {
     e.preventDefault();
     e.stopPropagation();
     el.classList.remove('drag-over');
-    el.classList.remove('drag-target-folder');
+    el.classList.remove('drag-merge-ready');
     clearExtDragState();
 
     const targetIndex = parseInt(el.dataset.index, 10);
@@ -520,14 +567,24 @@ function addDragHandlers(el) {
       if (draggedIndex < 0 || draggedIndex === targetIndex) return;
       const draggedItem = shortcuts[draggedIndex];
 
-      if (isFolder(targetItem) && !isFolder(draggedItem)) {
-        // Drop link into folder
+      if (isFolder(draggedItem)) {
+        // Folder dragged — just reorder (can't go inside another item)
+        const [moved] = shortcuts.splice(draggedIndex, 1);
+        shortcuts.splice(targetIndex, 0, moved);
+      } else if (isFolder(targetItem)) {
+        // Link → existing folder: add to folder
         targetItem.items.push(draggedItem);
         shortcuts.splice(draggedIndex, 1);
       } else {
-        // Reorder
-        const [moved] = shortcuts.splice(draggedIndex, 1);
-        shortcuts.splice(targetIndex, 0, moved);
+        // Link → Link: create new folder (Android-style)
+        const newFolder = {
+          name: 'Папка',
+          items: [draggedItem, targetItem]
+        };
+        const lower = Math.min(draggedIndex, targetIndex);
+        const higher = Math.max(draggedIndex, targetIndex);
+        shortcuts.splice(higher, 1);
+        shortcuts.splice(lower, 1, newFolder);
       }
       await save();
       render();
