@@ -345,12 +345,15 @@ body.has-bg::before {
   font-weight: 500;
   color: #6dd5ce;
   overflow: hidden;
+  pointer-events: none;
 }
 
 .folder-popover-item-icon img {
   width: 26px;
   height: 26px;
   object-fit: contain;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 .folder-popover-item-name {
@@ -361,6 +364,7 @@ body.has-bg::before {
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.2px;
+  pointer-events: none;
 }
 
 .folder-popover-item-delete {
