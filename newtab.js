@@ -35,6 +35,13 @@ const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const deleteBtn = document.getElementById('deleteBtn');
 const addBtn = document.getElementById('addBtn');
+const addFolderBtn = document.getElementById('addFolderBtn');
+const folderModal = document.getElementById('folderModal');
+const folderNameInput = document.getElementById('folderNameInput');
+const folderItemsList = document.getElementById('folderItemsList');
+const folderDeleteBtn = document.getElementById('folderDeleteBtn');
+const folderAddLinkBtn = document.getElementById('folderAddLinkBtn');
+const folderCloseBtn = document.getElementById('folderCloseBtn');
 const bgBtn = document.getElementById('bgBtn');
 const bgInput = document.getElementById('bgInput');
 const bgResetBtn = document.getElementById('bgResetBtn');
@@ -154,40 +161,84 @@ function firstLetter(s) {
   return (s || '?').trim().charAt(0).toUpperCase();
 }
 
+function isFolder(item) {
+  return item && Array.isArray(item.items);
+}
+
 function render() {
   shortcutsEl.innerHTML = '';
   shortcuts.forEach((s, i) => {
-    const a = document.createElement('a');
-    a.href = normalizeUrl(s.url);
-    a.className = 'shortcut';
-    a.draggable = true;
-    a.dataset.index = i;
-
-    const fav = faviconUrl(s.url);
-    a.innerHTML = `
-      <button class="shortcut-edit" title="Изменить">⋮</button>
-      <div class="shortcut-icon">
-        ${fav ? `<img src="${fav}" alt="" loading="lazy">` : `<span>${escapeHtml(firstLetter(s.name))}</span>`}
-      </div>
-      <div class="shortcut-name">${escapeHtml(s.name)}</div>
-    `;
-
-    const img = a.querySelector('img');
-    if (img) {
-      img.addEventListener('error', () => {
-        img.replaceWith(Object.assign(document.createElement('span'), { textContent: firstLetter(s.name) }));
-      });
-    }
-
-    a.querySelector('.shortcut-edit').addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openModal(i);
-    });
-
-    addDragHandlers(a);
-    shortcutsEl.appendChild(a);
+    const el = isFolder(s) ? renderFolder(s, i) : renderLink(s, i);
+    addDragHandlers(el);
+    shortcutsEl.appendChild(el);
   });
+}
+
+function renderLink(s, i) {
+  const a = document.createElement('a');
+  a.href = normalizeUrl(s.url);
+  a.className = 'shortcut';
+  a.draggable = true;
+  a.dataset.index = i;
+
+  const fav = faviconUrl(s.url);
+  a.innerHTML = `
+    <button class="shortcut-edit" title="Изменить">⋮</button>
+    <div class="shortcut-icon">
+      ${fav ? `<img src="${fav}" alt="" loading="lazy">` : `<span>${escapeHtml(firstLetter(s.name))}</span>`}
+    </div>
+    <div class="shortcut-name">${escapeHtml(s.name)}</div>
+  `;
+
+  const img = a.querySelector('img');
+  if (img) {
+    img.addEventListener('error', () => {
+      img.replaceWith(Object.assign(document.createElement('span'), { textContent: firstLetter(s.name) }));
+    });
+  }
+
+  a.querySelector('.shortcut-edit').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openModal(i);
+  });
+
+  return a;
+}
+
+function renderFolder(folder, i) {
+  const div = document.createElement('div');
+  div.className = 'shortcut folder';
+  div.draggable = true;
+  div.dataset.index = i;
+
+  const previews = folder.items.slice(0, 4);
+  const cells = [];
+  for (let k = 0; k < 4; k++) {
+    if (k < previews.length) {
+      const item = previews[k];
+      const fav = faviconUrl(item.url);
+      cells.push(fav
+        ? `<img src="${fav}" alt="" loading="lazy">`
+        : `<span class="folder-preview-letter">${escapeHtml(firstLetter(item.name))}</span>`);
+    } else {
+      cells.push('<span class="folder-preview-empty"></span>');
+    }
+  }
+
+  div.innerHTML = `
+    <div class="shortcut-icon folder-icon">
+      <div class="folder-preview-grid">${cells.join('')}</div>
+    </div>
+    <div class="shortcut-name">${escapeHtml(folder.name || 'Папка')}</div>
+  `;
+
+  div.addEventListener('click', (e) => {
+    e.preventDefault();
+    openFolder(i);
+  });
+
+  return div;
 }
 
 function openModal(index = -1) {
@@ -210,9 +261,127 @@ function openModal(index = -1) {
 function closeModal() {
   modal.classList.remove('active');
   editingIndex = -1;
+  // If we were adding a link to a folder and user cancelled — reopen the folder
+  if (addingLinkToFolderIndex >= 0) {
+    const folderIdx = addingLinkToFolderIndex;
+    addingLinkToFolderIndex = -1;
+    openFolder(folderIdx);
+  }
 }
 
 addBtn.addEventListener('click', () => openModal(-1));
+
+// === Folders ===
+
+let openedFolderIndex = -1;
+let addingLinkToFolderIndex = -1;
+
+addFolderBtn.addEventListener('click', async () => {
+  const name = prompt('Название папки:', 'Новая папка');
+  if (name === null) return;
+  const trimmed = name.trim() || 'Папка';
+  shortcuts.push({ name: trimmed, items: [] });
+  await save();
+  render();
+});
+
+function openFolder(index) {
+  if (!isFolder(shortcuts[index])) return;
+  openedFolderIndex = index;
+  folderNameInput.value = shortcuts[index].name || '';
+  renderFolderItems();
+  folderModal.classList.add('active');
+}
+
+function closeFolder() {
+  // Commit name on close
+  if (openedFolderIndex >= 0) {
+    const newName = folderNameInput.value.trim() || 'Папка';
+    if (shortcuts[openedFolderIndex].name !== newName) {
+      shortcuts[openedFolderIndex].name = newName;
+      save().then(render);
+    }
+  }
+  openedFolderIndex = -1;
+  folderModal.classList.remove('active');
+}
+
+function renderFolderItems() {
+  const folder = shortcuts[openedFolderIndex];
+  if (!folder) return;
+  folderItemsList.innerHTML = '';
+  if (!folder.items || folder.items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'folder-empty-msg';
+    empty.textContent = 'Папка пуста. Добавь ссылку или перетащи ярлык на эту папку.';
+    folderItemsList.appendChild(empty);
+    return;
+  }
+  folder.items.forEach((link, idx) => {
+    const a = document.createElement('a');
+    a.href = normalizeUrl(link.url);
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.className = 'folder-item';
+
+    const fav = faviconUrl(link.url);
+    a.innerHTML = `
+      <div class="folder-item-icon">
+        ${fav ? `<img src="${fav}" alt="" loading="lazy">` : `<span>${escapeHtml(firstLetter(link.name))}</span>`}
+      </div>
+      <span class="folder-item-name">${escapeHtml(link.name)}</span>
+      <button class="folder-item-delete" title="Удалить">×</button>
+    `;
+    const img = a.querySelector('img');
+    if (img) {
+      img.addEventListener('error', () => {
+        img.replaceWith(Object.assign(document.createElement('span'), { textContent: firstLetter(link.name) }));
+      });
+    }
+
+    a.querySelector('.folder-item-delete').addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      folder.items.splice(idx, 1);
+      await save();
+      renderFolderItems();
+      render();
+    });
+
+    folderItemsList.appendChild(a);
+  });
+}
+
+folderCloseBtn.addEventListener('click', closeFolder);
+
+folderModal.addEventListener('click', (e) => {
+  if (e.target === folderModal) closeFolder();
+});
+
+folderDeleteBtn.addEventListener('click', async () => {
+  if (openedFolderIndex < 0) return;
+  const folder = shortcuts[openedFolderIndex];
+  const itemCount = folder.items ? folder.items.length : 0;
+  if (itemCount > 0 && !confirm(`Удалить папку «${folder.name}»? Внутри ${itemCount} ссылок, они будут потеряны.`)) return;
+  shortcuts.splice(openedFolderIndex, 1);
+  openedFolderIndex = -1;
+  folderModal.classList.remove('active');
+  await save();
+  render();
+});
+
+folderAddLinkBtn.addEventListener('click', () => {
+  if (openedFolderIndex < 0) return;
+  addingLinkToFolderIndex = openedFolderIndex;
+  // Hide folder modal temporarily, open shortcut modal
+  folderModal.classList.remove('active');
+  openModal(-1);
+});
+
+folderNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); closeFolder(); }
+  if (e.key === 'Escape') { e.preventDefault(); folderNameInput.blur(); closeFolder(); }
+});
 
 bgBtn.addEventListener('click', () => {
   bgInput.click();
@@ -252,6 +421,17 @@ saveBtn.addEventListener('click', async () => {
     else urlInput.focus();
     return;
   }
+  if (addingLinkToFolderIndex >= 0) {
+    // Add link to folder
+    shortcuts[addingLinkToFolderIndex].items.push({ name, url });
+    const folderIdx = addingLinkToFolderIndex;
+    addingLinkToFolderIndex = -1;
+    await save();
+    render();
+    closeModal();
+    openFolder(folderIdx);
+    return;
+  }
   if (editingIndex >= 0) {
     shortcuts[editingIndex] = { name, url };
   } else {
@@ -278,6 +458,7 @@ modal.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (modal.classList.contains('active')) closeModal();
+    if (folderModal.classList.contains('active')) closeFolder();
     if (!settingsMenu.hidden) settingsMenu.hidden = true;
   }
   if (e.key === 'Enter' && modal.classList.contains('active') && document.activeElement !== nameInput && document.activeElement !== urlInput) {
@@ -312,27 +493,52 @@ function addDragHandlers(el) {
   });
   el.addEventListener('dragenter', (e) => {
     e.preventDefault();
-    if (parseInt(el.dataset.index, 10) !== draggedIndex) el.classList.add('drag-over');
+    const idx = parseInt(el.dataset.index, 10);
+    if (idx === draggedIndex) return;
+    const targetItem = shortcuts[idx];
+    if (isFolder(targetItem) && draggedIndex >= 0 && !isFolder(shortcuts[draggedIndex])) {
+      el.classList.add('drag-target-folder');
+    } else {
+      el.classList.add('drag-over');
+    }
   });
-  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('dragleave', () => {
+    el.classList.remove('drag-over');
+    el.classList.remove('drag-target-folder');
+  });
   el.addEventListener('drop', async (e) => {
     e.preventDefault();
     e.stopPropagation();
     el.classList.remove('drag-over');
+    el.classList.remove('drag-target-folder');
     clearExtDragState();
 
     const targetIndex = parseInt(el.dataset.index, 10);
+    const targetItem = shortcuts[targetIndex];
+
     if (e.dataTransfer.getData('application/x-shortcut-index')) {
-      if (draggedIndex >= 0 && draggedIndex !== targetIndex) {
+      if (draggedIndex < 0 || draggedIndex === targetIndex) return;
+      const draggedItem = shortcuts[draggedIndex];
+
+      if (isFolder(targetItem) && !isFolder(draggedItem)) {
+        // Drop link into folder
+        targetItem.items.push(draggedItem);
+        shortcuts.splice(draggedIndex, 1);
+      } else {
+        // Reorder
         const [moved] = shortcuts.splice(draggedIndex, 1);
         shortcuts.splice(targetIndex, 0, moved);
-        await save();
-        render();
       }
+      await save();
+      render();
     } else {
       const parsed = parseDroppedData(e.dataTransfer);
       if (parsed) {
-        shortcuts.splice(targetIndex, 0, parsed);
+        if (isFolder(targetItem)) {
+          targetItem.items.push(parsed);
+        } else {
+          shortcuts.splice(targetIndex, 0, parsed);
+        }
         await save();
         render();
       }

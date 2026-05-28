@@ -191,6 +191,165 @@ body.has-bg::before {
   display: flex;
 }
 
+.shortcut.folder .shortcut-icon {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 6px;
+}
+
+.folder-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+}
+
+.folder-preview-grid img,
+.folder-preview-grid .folder-preview-letter {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+  background: rgba(28, 52, 57, 0.6);
+  font-size: 9px;
+  font-weight: 500;
+  color: #6dd5ce;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.folder-preview-grid .folder-preview-empty {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+}
+
+.folder-modal-content {
+  min-width: 420px;
+  max-width: 90vw;
+}
+
+.folder-name-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #3a5a60;
+  color: #6dd5ce;
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+  margin-bottom: 14px;
+  font-family: inherit;
+}
+
+.folder-name-input:focus {
+  border-bottom-color: #6dd5ce;
+}
+
+.folder-items-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  padding: 2px;
+}
+
+.folder-items-list::-webkit-scrollbar { width: 6px; }
+.folder-items-list::-webkit-scrollbar-thumb {
+  background: rgba(109, 213, 206, 0.3);
+  border-radius: 3px;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #fff;
+  transition: background 0.12s;
+  position: relative;
+}
+
+.folder-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.folder-item-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #1c3439;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: #6dd5ce;
+  overflow: hidden;
+}
+
+.folder-item-icon img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.folder-item-name {
+  flex: 1 1 auto;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-item-delete {
+  background: transparent;
+  border: none;
+  color: #8aa0a4;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  visibility: hidden;
+  font-family: inherit;
+}
+
+.folder-item:hover .folder-item-delete {
+  visibility: visible;
+}
+
+.folder-item-delete:hover {
+  color: #ff7a7a;
+}
+
+.folder-modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.folder-modal-buttons .btn-delete {
+  margin-right: auto;
+}
+
+.folder-empty-msg {
+  text-align: center;
+  padding: 24px 12px;
+  color: #6a8a90;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.shortcut.drag-target-folder {
+  background: rgba(109, 213, 206, 0.22);
+  outline: 2px dashed #6dd5ce;
+  outline-offset: -2px;
+}
+
 .actions {
   margin-top: 40px;
   display: flex;
