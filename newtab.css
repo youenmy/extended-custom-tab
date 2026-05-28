@@ -277,13 +277,13 @@ body.has-bg::before {
 
 .folder-popover {
   position: fixed;
-  background: rgba(42, 66, 72, 0.75);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(109, 213, 206, 0.18);
+  background: rgba(42, 66, 72, 0.35);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
-  padding: 18px 18px 14px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  padding: 16px 16px 18px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   z-index: 200;
   animation: fp-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   opacity: 0;
@@ -433,44 +433,22 @@ body.has-bg::before {
   border-color: #ff7a7a;
 }
 
-.folder-popover-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+.shortcut.selected {
+  background: rgba(109, 213, 206, 0.18);
+  outline: 2px solid #6dd5ce;
+  outline-offset: -2px;
 }
 
-.folder-popover-action {
-  background: transparent;
-  border: 1px solid rgba(109, 213, 206, 0.3);
-  color: #cfd8d9;
-  cursor: pointer;
-  padding: 6px 14px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-family: inherit;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+body.folder-item-dragging .folder-popover-backdrop {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
 }
 
-.folder-popover-action:hover {
-  background: rgba(109, 213, 206, 0.15);
-  color: #6dd5ce;
-  border-color: #6dd5ce;
-}
-
-.folder-popover-action.danger {
-  color: #ff8a8a;
-  border-color: rgba(255, 138, 138, 0.3);
-  padding: 6px 12px;
-}
-
-.folder-popover-action.danger:hover {
-  background: rgba(255, 138, 138, 0.12);
-  color: #ff7a7a;
-  border-color: #ff7a7a;
+body.folder-item-dragging .folder-popover {
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity 0.15s;
 }
 
 .actions {

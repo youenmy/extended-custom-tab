@@ -25,6 +25,7 @@ const syncStorage = (typeof chrome !== 'undefined' && chrome.storage && chrome.s
 let shortcuts = [];
 let editingIndex = -1;
 let draggedIndex = -1;
+let selectedIndices = new Set();
 
 const shortcutsEl = document.getElementById('shortcuts');
 const modal = document.getElementById('modal');
@@ -171,6 +172,7 @@ function renderLink(s, i) {
   const a = document.createElement('a');
   a.href = normalizeUrl(s.url);
   a.className = 'shortcut';
+  if (selectedIndices.has(i)) a.classList.add('selected');
   a.draggable = true;
   a.dataset.index = i;
 
@@ -189,6 +191,16 @@ function renderLink(s, i) {
       img.replaceWith(Object.assign(document.createElement('span'), { textContent: firstLetter(s.name) }));
     });
   }
+
+  a.addEventListener('click', (e) => {
+    if (e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (selectedIndices.has(i)) selectedIndices.delete(i);
+      else selectedIndices.add(i);
+      render();
+    }
+  });
 
   a.querySelector('.shortcut-edit').addEventListener('click', (e) => {
     e.preventDefault();
@@ -313,10 +325,6 @@ function openFolder(index) {
   popover.innerHTML = `
     <input type="text" class="folder-popover-title" id="folderPopoverTitle" value="${escapeHtml(folder.name || 'Папка')}" placeholder="Папка">
     <div class="folder-popover-grid" id="folderPopoverGrid"></div>
-    <div class="folder-popover-actions">
-      <button class="folder-popover-action danger" id="folderPopoverDelete">Удалить</button>
-      <button class="folder-popover-action" id="folderPopoverAdd">+ Добавить ссылку</button>
-    </div>
   `;
   document.body.appendChild(popover);
 
@@ -334,23 +342,6 @@ function openFolder(index) {
       await save();
       render();
     }
-  });
-
-  document.getElementById('folderPopoverDelete').addEventListener('click', async () => {
-    const f = shortcuts[index];
-    if (f && f.items && f.items.length > 0) {
-      if (!confirm(`Удалить «${f.name}»? Внутри ${f.items.length} ссылок.`)) return;
-    }
-    shortcuts.splice(index, 1);
-    closeFolderPopover(true);
-    await save();
-    render();
-  });
-
-  document.getElementById('folderPopoverAdd').addEventListener('click', () => {
-    addingLinkToFolderIndex = index;
-    closeFolderPopover(true);
-    openModal(-1);
   });
 }
 
@@ -374,6 +365,7 @@ function renderFolderPopoverGrid(index) {
     a.target = '_blank';
     a.rel = 'noopener';
     a.className = 'folder-popover-item';
+    a.draggable = true;
 
     const fav = faviconUrl(link.url);
     a.innerHTML = `
@@ -394,16 +386,27 @@ function renderFolderPopoverGrid(index) {
       e.stopPropagation();
       folder.items.splice(idx, 1);
       await save();
-      renderFolderPopoverGrid(index);
-      render();
-      // If folder becomes empty after delete — close popover and remove folder
       if (folder.items.length === 0) {
+        // Auto-remove empty folder
         shortcuts.splice(index, 1);
         closeFolderPopover();
         await save();
         render();
+      } else {
+        renderFolderPopoverGrid(index);
+        render();
       }
     });
+
+    a.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/x-folder-item', JSON.stringify({ folderIdx: index, itemIdx: idx }));
+      document.body.classList.add('folder-item-dragging');
+    });
+    a.addEventListener('dragend', () => {
+      document.body.classList.remove('folder-item-dragging');
+    });
+
     grid.appendChild(a);
   });
 }
@@ -504,6 +507,10 @@ document.addEventListener('keydown', (e) => {
     if (modal.classList.contains('active')) closeModal();
     if (document.querySelector('.folder-popover')) closeFolderPopover();
     if (!settingsMenu.hidden) settingsMenu.hidden = true;
+    if (selectedIndices.size > 0) {
+      selectedIndices.clear();
+      render();
+    }
   }
   if (e.key === 'Enter' && modal.classList.contains('active') && document.activeElement !== nameInput && document.activeElement !== urlInput) {
     saveBtn.click();
@@ -524,7 +531,12 @@ function addDragHandlers(el) {
     draggedIndex = parseInt(el.dataset.index, 10);
     el.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/x-shortcut-index', String(draggedIndex));
+    if (selectedIndices.has(draggedIndex) && selectedIndices.size > 1) {
+      // Multi-drag: serialize selected indices
+      e.dataTransfer.setData('application/x-shortcut-indices', JSON.stringify(Array.from(selectedIndices)));
+    } else {
+      e.dataTransfer.setData('application/x-shortcut-index', String(draggedIndex));
+    }
   });
   el.addEventListener('dragend', () => {
     el.classList.remove('dragging');
@@ -559,28 +571,79 @@ function addDragHandlers(el) {
     el.classList.remove('drag-over');
     el.classList.remove('drag-merge-ready');
     clearExtDragState();
+    document.body.classList.remove('folder-item-dragging');
 
     const targetIndex = parseInt(el.dataset.index, 10);
     const targetItem = shortcuts[targetIndex];
+    if (!targetItem) return;
 
+    // 1. Drag from folder popover (out / between folders)
+    const folderItemData = e.dataTransfer.getData('application/x-folder-item');
+    if (folderItemData) {
+      try {
+        const { folderIdx, itemIdx } = JSON.parse(folderItemData);
+        if (folderIdx === targetIndex) return; // dropped back on source folder
+        const sourceFolder = shortcuts[folderIdx];
+        if (!sourceFolder || !sourceFolder.items[itemIdx]) return;
+        const [moved] = sourceFolder.items.splice(itemIdx, 1);
+        if (isFolder(targetItem)) {
+          targetItem.items.push(moved);
+        } else {
+          // Link target → create new folder containing both
+          const newFolder = { name: 'Папка', items: [moved, targetItem] };
+          shortcuts.splice(targetIndex, 1, newFolder);
+        }
+        // Cleanup empty source folder
+        if (sourceFolder.items.length === 0) {
+          const srcIdx = shortcuts.indexOf(sourceFolder);
+          if (srcIdx >= 0) shortcuts.splice(srcIdx, 1);
+          closeFolderPopover();
+        } else if (openedFolderIndex >= 0) {
+          renderFolderPopoverGrid(openedFolderIndex);
+        }
+        await save();
+        render();
+      } catch {}
+      return;
+    }
+
+    // 2. Multi-select drag
+    const multiData = e.dataTransfer.getData('application/x-shortcut-indices');
+    if (multiData) {
+      try {
+        const indices = JSON.parse(multiData);
+        if (indices.includes(targetIndex)) return; // can't drop on self
+        const items = indices.map((i) => shortcuts[i]).filter((it) => it && !isFolder(it));
+        if (items.length === 0) return;
+        if (isFolder(targetItem)) {
+          items.forEach((it) => targetItem.items.push(it));
+        } else {
+          const newFolder = { name: 'Папка', items: [...items, targetItem] };
+          shortcuts[targetIndex] = newFolder;
+        }
+        // Remove originals (descending order to preserve indices)
+        const sortedDesc = [...indices].sort((a, b) => b - a);
+        sortedDesc.forEach((i) => { if (i !== targetIndex) shortcuts.splice(i, 1); });
+        selectedIndices.clear();
+        await save();
+        render();
+      } catch {}
+      return;
+    }
+
+    // 3. Single in-grid drag
     if (e.dataTransfer.getData('application/x-shortcut-index')) {
       if (draggedIndex < 0 || draggedIndex === targetIndex) return;
       const draggedItem = shortcuts[draggedIndex];
 
       if (isFolder(draggedItem)) {
-        // Folder dragged — just reorder (can't go inside another item)
         const [moved] = shortcuts.splice(draggedIndex, 1);
         shortcuts.splice(targetIndex, 0, moved);
       } else if (isFolder(targetItem)) {
-        // Link → existing folder: add to folder
         targetItem.items.push(draggedItem);
         shortcuts.splice(draggedIndex, 1);
       } else {
-        // Link → Link: create new folder (Android-style)
-        const newFolder = {
-          name: 'Папка',
-          items: [draggedItem, targetItem]
-        };
+        const newFolder = { name: 'Папка', items: [draggedItem, targetItem] };
         const lower = Math.min(draggedIndex, targetIndex);
         const higher = Math.max(draggedIndex, targetIndex);
         shortcuts.splice(higher, 1);
@@ -588,17 +651,19 @@ function addDragHandlers(el) {
       }
       await save();
       render();
-    } else {
-      const parsed = parseDroppedData(e.dataTransfer);
-      if (parsed) {
-        if (isFolder(targetItem)) {
-          targetItem.items.push(parsed);
-        } else {
-          shortcuts.splice(targetIndex, 0, parsed);
-        }
-        await save();
-        render();
+      return;
+    }
+
+    // 4. External URL drop
+    const parsed = parseDroppedData(e.dataTransfer);
+    if (parsed) {
+      if (isFolder(targetItem)) {
+        targetItem.items.push(parsed);
+      } else {
+        shortcuts.splice(targetIndex, 0, parsed);
       }
+      await save();
+      render();
     }
   });
 }
@@ -644,7 +709,10 @@ function parseDroppedData(dataTransfer) {
 }
 
 function isExternalDrag(dt) {
-  return !Array.from(dt.types).includes('application/x-shortcut-index');
+  const types = Array.from(dt.types);
+  return !types.includes('application/x-shortcut-index')
+      && !types.includes('application/x-shortcut-indices')
+      && !types.includes('application/x-folder-item');
 }
 
 function hasUrlInTransfer(dt) {
@@ -680,12 +748,42 @@ document.addEventListener('dragleave', (e) => {
 });
 
 document.addEventListener('dragover', (e) => {
+  const types = Array.from(e.dataTransfer.types);
+  // Allow drop for folder-item drag too (so user can drop on empty space)
+  if (types.includes('application/x-folder-item')) {
+    e.preventDefault();
+    return;
+  }
   if (!isExternalDrag(e.dataTransfer)) return;
   if (!dragKind(e.dataTransfer)) return;
   e.preventDefault();
 });
 
 document.addEventListener('drop', async (e) => {
+  // Folder item dropped on empty area → move to top-level
+  const folderItemData = e.dataTransfer.getData('application/x-folder-item');
+  if (folderItemData) {
+    e.preventDefault();
+    document.body.classList.remove('folder-item-dragging');
+    try {
+      const { folderIdx, itemIdx } = JSON.parse(folderItemData);
+      const sourceFolder = shortcuts[folderIdx];
+      if (!sourceFolder || !sourceFolder.items[itemIdx]) return;
+      const [moved] = sourceFolder.items.splice(itemIdx, 1);
+      shortcuts.push(moved);
+      if (sourceFolder.items.length === 0) {
+        const srcIdx = shortcuts.indexOf(sourceFolder);
+        if (srcIdx >= 0) shortcuts.splice(srcIdx, 1);
+        closeFolderPopover();
+      } else if (openedFolderIndex >= 0) {
+        renderFolderPopoverGrid(openedFolderIndex);
+      }
+      await save();
+      render();
+    } catch {}
+    return;
+  }
+
   if (!isExternalDrag(e.dataTransfer)) return;
   if (!dragKind(e.dataTransfer)) return;
   e.preventDefault();
