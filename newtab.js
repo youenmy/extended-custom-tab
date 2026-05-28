@@ -426,7 +426,9 @@ function renderFolderPopoverGrid(index) {
       }
     });
 
+    item.addEventListener('mousedown', () => console.log('[ECT] mousedown on folder item', idx));
     item.addEventListener('dragstart', (e) => {
+      console.log('[ECT] dragstart on folder item', idx);
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('application/x-folder-item', JSON.stringify({ folderIdx: index, itemIdx: idx }));
       fadeFolderPopover(true);
