@@ -302,13 +302,13 @@ function openFolder(index) {
   const popoverWidth = 360;
   const popoverHeightEstimate = 56 + rows * 92 + 8;
 
-  let left = rect.left + rect.width / 2 - popoverWidth / 2;
-  let top = rect.bottom + 12;
+  // Center the popover on the folder icon's center so it expands from there
+  const folderCX = rect.left + rect.width / 2;
+  const folderCY = rect.top + rect.height / 2;
+  let left = folderCX - popoverWidth / 2;
+  let top = folderCY - popoverHeightEstimate / 2;
   left = Math.max(16, Math.min(left, vpW - popoverWidth - 16));
-  if (top + popoverHeightEstimate > vpH - 16) {
-    top = rect.top - popoverHeightEstimate - 12;
-  }
-  if (top < 16) top = 16;
+  top = Math.max(16, Math.min(top, vpH - popoverHeightEstimate - 16));
 
   const popover = document.createElement('div');
   popover.className = 'folder-popover';
