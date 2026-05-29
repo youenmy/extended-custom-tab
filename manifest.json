@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Extended Custom Tab",
-  "version": "2.4",
+  "version": "2.5",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuRFqJsoCLinXEwACzgxew4HXrZdshXTCV46BEadxhBwkKE47UNVJg0kPuySMQD580xpO4RV6FCiAwGDlo6cSHiHDsH97As5EIde6Jc+5io3F0InEb8Kr6kuR1Ovzh/TYZknQpgvhvRmAGzBwBkIVtvwkJfL3fXCvjrde7RmWxa7O/TcZoUzUqGeuvyf+jcCKJH7dN2GaggKl+8fLtrXavGDfrJ60WBcwxFxnht9IQtJBMO6yHV9gb07xffqvE/53yAPA/gcIt+OcHBwWx9eaBojjmQSwaGHF9pxV88OeF5+QisZyg+V+UJor/qhTH5aAnKv74AS1ZrOyp6RsSiM3kwIDAQAB",
   "description": "Стартовая страница с неограниченным количеством ярлыков, заметками, календарём и почтой",
   "chrome_url_overrides": {
