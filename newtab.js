@@ -59,7 +59,7 @@ async function load() {
       console.warn('[v2.2] shortcuts sync migration failed:', e);
     }
   } else {
-    shortcuts = DEFAULT_SHORTCUTS;
+    shortcuts = DEFAULT_SHORTCUTS.map((s) => ({ ...s }));
   }
 
   applyBackground(localData && localData.background);
@@ -622,7 +622,10 @@ function addDragHandlers(el) {
   });
   el.addEventListener('dragend', () => {
     el.classList.remove('dragging');
-    document.querySelectorAll('.drag-over').forEach((x) => x.classList.remove('drag-over'));
+    document.querySelectorAll('.drag-over, .drag-merge-ready').forEach((x) => {
+      x.classList.remove('drag-over');
+      x.classList.remove('drag-merge-ready');
+    });
     draggedIndex = -1;
   });
   el.addEventListener('dragover', (e) => {
@@ -987,6 +990,7 @@ if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged)
     }
     if (changes.shortcuts) {
       shortcuts = changes.shortcuts.newValue || [];
+      selectedIndices.clear();
       render();
     }
   });
