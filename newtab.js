@@ -426,9 +426,7 @@ function renderFolderPopoverGrid(index) {
       }
     });
 
-    item.addEventListener('mousedown', () => console.log('[ECT] mousedown on folder item', idx));
     item.addEventListener('dragstart', (e) => {
-      console.log('[ECT] dragstart on folder item', idx);
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('application/x-folder-item', JSON.stringify({ folderIdx: index, itemIdx: idx }));
       fadeFolderPopover(true);
@@ -823,14 +821,8 @@ document.addEventListener('dragleave', (e) => {
 });
 
 document.addEventListener('dragover', (e) => {
-  const types = Array.from(e.dataTransfer.types);
-  // Allow drop for folder-item drag too (so user can drop on empty space)
-  if (types.includes('application/x-folder-item')) {
-    e.preventDefault();
-    return;
-  }
-  if (!isExternalDrag(e.dataTransfer)) return;
-  if (!dragKind(e.dataTransfer)) return;
+  // Chrome hides custom MIME types in dataTransfer.types during dragover (protected mode).
+  // Always preventDefault so drop can fire; the drop handler discriminates by getData.
   e.preventDefault();
 });
 
