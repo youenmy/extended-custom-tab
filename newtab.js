@@ -444,23 +444,12 @@ function fadeFolderPopover(fade) {
   const b = document.querySelector('.folder-popover-backdrop');
   if (p) {
     p.style.transition = 'opacity 0.15s';
-    if (fade) {
-      p.style.opacity = '0.18';
-      p.style.pointerEvents = 'none';
-    } else {
-      p.style.opacity = '';
-      p.style.pointerEvents = '';
-    }
+    p.style.opacity = fade ? '0.18' : '';
+    p.style.pointerEvents = fade ? 'none' : '';
   }
   if (b) {
-    b.style.transition = 'opacity 0.15s';
-    if (fade) {
-      b.style.opacity = '0';
-      b.style.pointerEvents = 'none';
-    } else {
-      b.style.opacity = '';
-      b.style.pointerEvents = '';
-    }
+    // Fully hide backdrop during drag so it doesn't intercept drops on the grid below
+    b.style.display = fade ? 'none' : '';
   }
 }
 
