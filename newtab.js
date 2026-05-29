@@ -434,6 +434,26 @@ function renderFolderPopoverGrid(index) {
     item.addEventListener('dragend', () => {
       fadeFolderPopover(false);
     });
+    // Reorder within the same folder
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    item.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const data = e.dataTransfer.getData('application/x-folder-item');
+      if (!data) return;
+      try {
+        const src = JSON.parse(data);
+        if (src.folderIdx !== index || src.itemIdx === idx) return;
+        const [moved] = folder.items.splice(src.itemIdx, 1);
+        folder.items.splice(idx, 0, moved);
+        await save();
+        renderFolderPopoverGrid(index);
+        render();
+      } catch {}
+    });
 
     grid.appendChild(item);
   });
@@ -444,8 +464,8 @@ function fadeFolderPopover(fade) {
   const b = document.querySelector('.folder-popover-backdrop');
   if (p) {
     p.style.transition = 'opacity 0.15s';
-    p.style.opacity = fade ? '0.18' : '';
-    p.style.pointerEvents = fade ? 'none' : '';
+    p.style.opacity = fade ? '0.4' : '';
+    // keep pointer-events ON so reordering within the folder still works
   }
   if (b) {
     // Fully hide backdrop during drag so it doesn't intercept drops on the grid below
