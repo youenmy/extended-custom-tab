@@ -44,8 +44,12 @@ const settingsMenu = document.getElementById('settingsMenu');
 async function load() {
   const [syncData, localData] = await Promise.all([
     syncStorage.get('shortcuts').catch(() => ({})),
-    storage.get(['shortcuts', 'background'])
+    storage.get(['shortcuts', 'background', 'uiScale', 'collapsedPanels'])
   ]);
+
+  applyUiScale((localData && localData.uiScale) || 1);
+  collapsedPanels = (localData && localData.collapsedPanels) || {};
+  applyCollapsedPanels();
 
   if (syncData && syncData.shortcuts) {
     shortcuts = syncData.shortcuts;
@@ -538,6 +542,53 @@ document.addEventListener('click', (e) => {
   if (!settingsMenu.hidden && !settingsMenu.contains(e.target) && e.target !== settingsBtn) {
     settingsMenu.hidden = true;
   }
+});
+
+// === UI scale ===
+
+const scaleBtnsEl = document.getElementById('scaleBtns');
+
+function applyUiScale(scale) {
+  document.body.style.zoom = scale;
+  scaleBtnsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', parseFloat(b.dataset.scale) === scale);
+  });
+}
+
+scaleBtnsEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-scale]');
+  if (!btn) return;
+  const scale = parseFloat(btn.dataset.scale);
+  applyUiScale(scale);
+  await storage.set({ uiScale: scale });
+});
+
+// === Collapsible panels ===
+
+let collapsedPanels = {};
+
+const COLLAPSIBLE_PANELS = {
+  notes: { el: document.querySelector('.notes-panel'), btn: document.getElementById('notesCollapse') },
+  calendar: { el: document.querySelector('.calendar-panel'), btn: document.getElementById('calendarCollapse') },
+  mail: { el: document.querySelector('.mail-panel'), btn: document.getElementById('mailCollapse') }
+};
+
+function applyCollapsedPanels() {
+  Object.entries(COLLAPSIBLE_PANELS).forEach(([key, { el, btn }]) => {
+    const collapsed = !!collapsedPanels[key];
+    el.classList.toggle('collapsed', collapsed);
+    const label = collapsed ? 'Развернуть' : 'Свернуть';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  });
+}
+
+Object.entries(COLLAPSIBLE_PANELS).forEach(([key, { btn }]) => {
+  btn.addEventListener('click', async () => {
+    collapsedPanels[key] = !collapsedPanels[key];
+    applyCollapsedPanels();
+    await storage.set({ collapsedPanels });
+  });
 });
 
 cancelBtn.addEventListener('click', closeModal);

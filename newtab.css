@@ -8,6 +8,11 @@
   display: none !important;
 }
 
+:root {
+  --panel-w: clamp(270px, 20vw, 380px);
+  --page-pad: 16px;
+}
+
 body {
   background-color: #1c3439;
   background-size: cover;
@@ -20,6 +25,11 @@ body {
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 16px;
+  padding: var(--page-pad);
 }
 
 input, textarea {
@@ -37,9 +47,12 @@ body.has-bg::before {
 }
 
 .container {
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 100px 40px 40px;
+  padding: clamp(24px, 8vh, 84px) 16px 40px;
   text-align: center;
   position: relative;
   z-index: 1;
@@ -51,7 +64,7 @@ body.has-bg::before {
 }
 
 .logo {
-  font-size: 90px;
+  font-size: clamp(52px, 7vw, 90px);
   font-weight: 400;
   color: #6dd5ce;
   letter-spacing: -2px;
@@ -71,7 +84,7 @@ body.has-bg::before {
 .search-form {
   position: relative;
   max-width: 584px;
-  margin: 0 auto 56px;
+  margin: 0 auto clamp(28px, 5vh, 56px);
 }
 
 .search-icon {
@@ -109,7 +122,7 @@ body.has-bg::before {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
   position: relative;
 }
@@ -432,11 +445,11 @@ body.has-bg::before {
 }
 
 .notes-panel {
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  width: 380px;
-  max-width: calc(100vw - 32px);
+  grid-column: 1;
+  grid-row: 1;
+  position: sticky;
+  top: var(--page-pad);
+  width: var(--panel-w);
   max-height: 60vh;
   background: rgba(42, 66, 72, 0.78);
   border: 1px solid #3a5a60;
@@ -452,7 +465,7 @@ body.has-bg::before {
 .notes-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 10px 12px 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
@@ -464,6 +477,7 @@ body.has-bg::before {
   font-weight: 500;
   letter-spacing: 1px;
   text-transform: uppercase;
+  margin-right: auto;
 }
 
 .notes-add {
@@ -613,11 +627,11 @@ body.has-bg::before {
 }
 
 .right-column {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  width: 380px;
-  max-width: calc(100vw - 32px);
+  grid-column: 3;
+  grid-row: 1;
+  position: sticky;
+  top: var(--page-pad);
+  width: var(--panel-w);
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
@@ -652,7 +666,7 @@ body.has-bg::before {
 .calendar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 10px 12px 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
@@ -664,6 +678,7 @@ body.has-bg::before {
   font-weight: 500;
   letter-spacing: 1px;
   text-transform: uppercase;
+  margin-right: auto;
 }
 
 .calendar-refresh {
@@ -1261,5 +1276,168 @@ body.has-bg::before {
   border-radius: 4px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+}
+
+/* === Collapsible panels === */
+
+.panel-collapse {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid #3a5a60;
+  color: #cfd8d9;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  font-family: inherit;
+  flex: 0 0 auto;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.2s;
+}
+
+.panel-collapse:hover {
+  background: rgba(109, 213, 206, 0.15);
+  color: #6dd5ce;
+  border-color: #6dd5ce;
+}
+
+.collapsed .panel-collapse {
+  transform: rotate(-90deg);
+}
+
+.notes-panel.collapsed,
+.calendar-panel.collapsed,
+.mail-panel.collapsed {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.notes-panel.collapsed {
+  width: auto;
+  min-width: 150px;
+}
+
+.collapsed .notes-header,
+.collapsed .calendar-header,
+.collapsed .mail-header {
+  border-bottom: none;
+}
+
+.notes-panel.collapsed .notes-list,
+.notes-panel.collapsed .notes-add,
+.calendar-panel.collapsed .calendar-content,
+.calendar-panel.collapsed .calendar-refresh,
+.mail-panel.collapsed .mail-content,
+.mail-panel.collapsed .mail-refresh {
+  display: none;
+}
+
+/* When both right panels are collapsed, let the column shrink */
+.right-column:has(.calendar-panel.collapsed):has(.mail-panel.collapsed) {
+  width: auto;
+  min-width: 150px;
+}
+
+.mail-panel.collapsed .mail-count {
+  margin-left: auto;
+}
+
+/* === UI scale control (settings menu) === */
+
+.settings-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px 8px;
+}
+
+.settings-scale-label {
+  font-size: 13px;
+  color: #fff;
+}
+
+.settings-scale-btns {
+  display: flex;
+  gap: 3px;
+}
+
+.settings-scale-btns button {
+  background: transparent;
+  border: 1px solid #3a5a60;
+  color: #cfd8d9;
+  font-size: 11px;
+  padding: 3px 6px;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.settings-scale-btns button:hover {
+  border-color: #6dd5ce;
+  color: #6dd5ce;
+}
+
+.settings-scale-btns button.active {
+  background: #6dd5ce;
+  color: #1c3439;
+  border-color: #6dd5ce;
+}
+
+/* === Responsive tweaks === */
+
+@media (max-width: 1550px) {
+  .shortcut {
+    width: 88px;
+    padding: 12px 4px 10px;
+  }
+
+  .shortcut-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  .shortcut-icon img {
+    width: 26px;
+    height: 26px;
+  }
+
+  .shortcut-name {
+    max-width: 80px;
+    font-size: 11px;
+  }
+}
+
+/* Narrow window: stack panels under the main content */
+@media (max-width: 1024px) {
+  body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .container {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .notes-panel {
+    grid-column: 1;
+    grid-row: 2;
+    position: static;
+    width: 100%;
+  }
+
+  .right-column {
+    grid-column: 1;
+    grid-row: 3;
+    position: static;
+    width: 100%;
+    max-height: none;
+  }
 }
 
